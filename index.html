@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tangkap Buah! (Hand Tracking)</title>
+<!--
+  ======================================================================
+  PENTING - BACA SEBELUM GUNA:
+  Fail ini guna MediaPipe HandLandmarker (deteksi 21 titik tangan sebenar)
+  yang dimuat dari CDN jsdelivr.net + model dari storage.googleapis.com.
+  Ia TIDAK akan jalan dalam pratonton artifact claude.ai (dihalang CSP),
+  jadi fail ini kena di-host di GitHub Pages / Netlify / mana-mana
+  pelayan web (perlukan HTTPS untuk akses kamera).
+
+  Ranking guna localStorage (tersimpan dalam peranti/pelayar itu sahaja).
+  Kalau nak ranking dikongsi merentasi banyak komputer/tablet, sambungkan
+  Firebase Realtime Database (tanya Claude untuk versi tu).
+  ======================================================================
+-->
+<style>
+  :root{
+    --sky1:#7ec8f2;
+    --sky2:#3fa9e8;
+    --sun:#ffd93d;
+    --wood:#7a4a26;
+    --wood-dark:#5c3419;
+    --cream:#fff6e0;
+    --leaf:#4a9c3d;
+    --red:#e63946;
+    --ink:#20303a;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    font-family:'Arial Rounded MT Bold','Baloo 2',system-ui,-apple-system,sans-serif;
+    background:linear-gradient(180deg,#bfe9ff 0%,#eaf7ff 100%);
+    color:var(--ink);
+    overflow:hidden;
+  }
+  #app{
+    width:100%;height:100%;min-height:100vh;
+    display:flex;align-items:center;justify-content:center;padding:16px;
+  }
+  .card{
+    background:var(--cream);border-radius:28px;
+    box-shadow:0 12px 0 #d8c48a, 0 18px 30px rgba(0,0,0,0.25);
+    padding:32px 28px;max-width:520px;width:100%;text-align:center;border:4px solid #fff;
+  }
+  h1{
+    font-size:2.1em;margin:0 0 4px;color:var(--red);
+    text-shadow:2px 2px 0 #fff, 4px 4px 0 rgba(0,0,0,0.08);letter-spacing:0.5px;
+  }
+  .subtitle{font-size:1.05em;color:var(--wood-dark);margin-bottom:18px;font-weight:700;}
+  .rules{
+    text-align:left;background:#fff;border-radius:16px;padding:16px 18px;margin:16px 0;
+    font-size:0.98em;line-height:1.7;border:2px dashed #ffcf6b;
+  }
+  .rules b{color:var(--red);}
+  .duration-row{display:flex;gap:10px;justify-content:center;margin:14px 0;flex-wrap:wrap;}
+  .dur-btn{
+    padding:10px 18px;border-radius:14px;border:3px solid var(--sky2);
+    background:#fff;color:var(--sky2);font-weight:800;font-size:1em;cursor:pointer;
+    transition:transform .12s ease;
+  }
+  .dur-btn.active{background:var(--sky2);color:#fff;}
+  .dur-btn:active{transform:scale(0.95);}
+  .big-btn{
+    margin-top:10px;background:linear-gradient(180deg,#6fcf5b,#4a9c3d);color:#fff;border:none;
+    padding:16px 30px;border-radius:20px;font-size:1.3em;font-weight:900;cursor:pointer;
+    box-shadow:0 6px 0 #2f6b26;transition:transform .1s ease;letter-spacing:0.5px;
+  }
+  .big-btn:active{transform:translateY(4px);box-shadow:0 2px 0 #2f6b26;}
+  .big-btn:disabled{opacity:0.6;cursor:not-allowed;}
+  .ghost-btn{
+    background:#fff;color:var(--sky2);border:3px solid var(--sky2);
+    padding:12px 22px;border-radius:16px;font-weight:800;font-size:1em;cursor:pointer;margin-top:10px;
+  }
+  .error-box{
+    background:#ffe3e3;border:2px solid var(--red);color:#a8202c;
+    border-radius:14px;padding:12px 14px;margin-top:14px;font-size:0.95em;text-align:left;
+  }
+  .hidden{display:none !important;}
+
+  #game-wrap{
+    position:relative;width:100%;max-width:720px;aspect-ratio:4/3;border-radius:24px;
+    overflow:hidden;box-shadow:0 14px 0 #2c6ea6, 0 22px 36px rgba(0,0,0,0.3);
+    border:5px solid #fff;background:#000;
+  }
+  #game-canvas{width:100%;height:100%;display:block;transform:scaleX(-1);}
+  #hud{
+    position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:flex-start;padding:10px 12px;pointer-events:none;
+  }
+  .chip{
+    background:linear-gradient(180deg,var(--wood),var(--wood-dark));color:var(--cream);
+    border-radius:14px;padding:8px 14px;font-weight:900;font-size:1.05em;
+    box-shadow:0 4px 0 #3d220f, inset 0 0 0 2px rgba(255,255,255,0.15);
+    min-width:78px;text-align:center;
+  }
+  .chip small{display:block;font-size:0.55em;font-weight:700;opacity:0.85;letter-spacing:1px;}
+  #countdown-overlay{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(0,0,0,0.35);color:#fff;font-size:5em;font-weight:900;
+    text-shadow:0 4px 0 rgba(0,0,0,0.4);
+  }
+  #loading-overlay{
+    position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;
+    align-items:center;justify-content:center;background:rgba(0,0,0,0.55);color:#fff;
+    font-size:1.1em;font-weight:800;text-align:center;padding:20px;
+  }
+  #combo-pop{
+    position:absolute;top:60px;left:50%;transform:translateX(-50%);color:#fff;font-weight:900;
+    font-size:1.4em;text-shadow:0 3px 0 rgba(0,0,0,0.35);opacity:0;transition:opacity .2s ease;
+    pointer-events:none;
+  }
+  .field{text-align:left;margin:10px 0;}
+  .field label{font-weight:800;font-size:0.9em;color:var(--wood-dark);display:block;margin-bottom:4px;}
+  .field input{
+    width:100%;padding:11px 12px;border-radius:12px;border:2px solid #cbb98a;
+    font-size:1em;font-family:inherit;
+  }
+  .score-final{font-size:3em;font-weight:900;color:var(--red);margin:6px 0;text-shadow:2px 2px 0 #fff;}
+  table.rank{width:100%;border-collapse:collapse;margin-top:10px;font-size:0.98em;}
+  table.rank td{padding:9px 8px;border-bottom:2px solid #f0e2bd;text-align:left;}
+  table.rank tr:first-child td{font-size:1.15em;}
+  .rank-name{font-weight:800;}
+  .rank-score{font-weight:900;color:var(--red);text-align:right !important;}
+  .muted{color:#8a7a5c;font-size:0.85em;margin-top:10px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- START SCREEN -->
+  <div id="screen-start" class="card">
+    <h1>🍓 Tangkap Buah!</h1>
+    <div class="subtitle">Hand Tracking — Tangan Terbuka Sahaja</div>
+    <div class="rules">
+      <div>📷 <b>Berdiri</b> agak jauh supaya badan & tangan kelihatan penuh.</div>
+      <div>✋ <b>Buka tangan</b> untuk tangkap buah — genggam tangan = tak tangkap.</div>
+      <div>💣 <b>Elak bom</b> — genggam tangan bila lalu dekat bom supaya selamat!</div>
+      <div>🏆 Markah tertinggi masuk <b>Papan Ranking</b> (peranti ini).</div>
+    </div>
+    <div class="duration-row" id="duration-row">
+      <button class="dur-btn" data-d="30">30 saat</button>
+      <button class="dur-btn active" data-d="45">45 saat</button>
+      <button class="dur-btn" data-d="60">60 saat</button>
+    </div>
+    <button class="big-btn" id="btn-start">🎮 Mula Main</button>
+    <div><button class="ghost-btn" id="btn-view-rank">🏆 Lihat Ranking</button></div>
+    <div id="cam-error" class="error-box hidden"></div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-wrap" class="hidden">
+    <video id="video" autoplay playsinline muted style="display:none"></video>
+    <canvas id="game-canvas" width="640" height="480"></canvas>
+    <div id="hud">
+      <div class="chip"><small>SKOR</small><span id="hud-score">0</span></div>
+      <div class="chip"><small>MASA</small><span id="hud-time">45</span></div>
+      <div class="chip"><small>KOMBO</small><span id="hud-combo">0</span></div>
+    </div>
+    <div id="combo-pop"></div>
+    <div id="countdown-overlay" class="hidden">3</div>
+    <div id="loading-overlay" class="hidden">
+      <div>⏳ Memuatkan model AI tangan...</div>
+      <div style="font-size:0.7em;font-weight:600;opacity:0.85;">Sekali sahaja, perlukan internet (~10MB)</div>
+    </div>
+  </div>
+
+  <!-- GAME OVER SCREEN -->
+  <div id="screen-gameover" class="card hidden">
+    <h1>⏰ Masa Tamat!</h1>
+    <div class="subtitle">Syabas atas usaha kamu!</div>
+    <div class="score-final" id="final-score">0</div>
+    <div class="muted" id="final-combo">Kombo terbaik: 0</div>
+    <div class="field">
+      <label>Nama Pemain</label>
+      <input type="text" id="input-name" maxlength="24" placeholder="Contoh: Ali">
+    </div>
+    <div class="field">
+      <label>Kelas (pilihan)</label>
+      <input type="text" id="input-class" maxlength="20" placeholder="Contoh: 4 Amanah">
+    </div>
+    <button class="big-btn" id="btn-save">💾 Simpan & Lihat Ranking</button>
+    <div><button class="ghost-btn" id="btn-skip-save">Main Semula Tanpa Simpan</button></div>
+  </div>
+
+  <!-- LEADERBOARD SCREEN -->
+  <div id="screen-leaderboard" class="card hidden">
+    <h1>🏆 Papan Ranking</h1>
+    <div class="subtitle" id="rank-subtitle">10 markah tertinggi (peranti ini)</div>
+    <div id="rank-list">Memuatkan...</div>
+    <button class="big-btn" id="btn-play-again">🔁 Main Lagi</button>
+  </div>
+
+</div>
+
+<script type="module">
+import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+  // ---------- constants ----------
+  const W = 640, H = 480;
+  const LB_KEY = 'tangkap-buah-leaderboard';
+  const LAST_PLAYER_KEY = 'tangkap-buah-last-player';
+
+  const FRUITS = [
+    {emoji:'🍎', pts:10, r:40, spd:1.0},
+    {emoji:'🍊', pts:10, r:40, spd:1.0},
+    {emoji:'🍌', pts:15, r:36, spd:1.15},
+    {emoji:'🍇', pts:20, r:30, spd:1.3},
+    {emoji:'🍉', pts:8,  r:54, spd:0.8},
+    {emoji:'🍓', pts:25, r:26, spd:1.4},
+  ];
+  const BOMB = {emoji:'💣', pts:-20, r:38, spd:1.05, bomb:true};
+
+  // finger landmark groups: [mcp, pip, dip, tip]
+  const FINGERS = [
+    [5,6,7,8],    // index
+    [9,10,11,12], // middle
+    [13,14,15,16],// ring
+    [17,18,19,20],// pinky
+  ];
+
+  // ---------- state ----------
+  const state = {
+    roundDuration:45,
+    score:0, combo:0, maxCombo:0, timeLeft:45,
+    fruits:[], effects:[], spawnTimer:0,
+    running:false, shake:0, flash:0, stream:null,
+    hands:[], // {cx,cy,r,open}
+  };
+
+  // ---------- dom ----------
+  const $ = id => document.getElementById(id);
+  const screenStart = $('screen-start');
+  const gameWrap = $('game-wrap');
+  const screenOver = $('screen-gameover');
+  const screenRank = $('screen-leaderboard');
+  const video = $('video');
+  const canvas = $('game-canvas');
+  const ctx = canvas.getContext('2d');
+  const hudScore = $('hud-score'), hudTime = $('hud-time'), hudCombo = $('hud-combo');
+  const comboPop = $('combo-pop');
+  const countdownOverlay = $('countdown-overlay');
+  const loadingOverlay = $('loading-overlay');
+  const camError = $('cam-error');
+
+  // ---------- audio ----------
+  let actx = null;
+  function beep(freq, dur, type){
+    try{
+      if(!actx) actx = new (window.AudioContext||window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || 'sine'; o.frequency.value = freq; g.gain.value = 0.15;
+      o.connect(g); g.connect(actx.destination); o.start();
+      g.gain.exponentialRampToValueAtTime(0.001, actx.currentTime + dur);
+      o.stop(actx.currentTime + dur);
+    }catch(e){}
+  }
+
+  // ---------- duration buttons ----------
+  document.querySelectorAll('.dur-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.roundDuration = parseInt(btn.dataset.d, 10);
+    });
+  });
+
+  // ---------- MediaPipe HandLandmarker setup ----------
+  let handLandmarker = null;
+  let handLandmarkerReady = false;
+  async function initHandLandmarker(){
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+    const modelUrl = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+    try{
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: modelUrl, delegate: "GPU" },
+        runningMode: "VIDEO",
+        numHands: 2,
+      });
+    }catch(e){
+      // GPU delegate can fail on some browsers/devices - fall back to CPU
+      handLandmarker = await HandLandmarker.createFromOptions(vision, {
+        baseOptions: { modelAssetPath: modelUrl, delegate: "CPU" },
+        runningMode: "VIDEO",
+        numHands: 2,
+      });
+    }
+    handLandmarkerReady = true;
+  }
+  // start loading immediately in the background so it's likely ready by
+  // the time the player presses "Mula Main"
+  const modelLoadPromise = initHandLandmarker().catch(err=>{
+    console.error('HandLandmarker load failed', err);
+    return Promise.reject(err);
+  });
+
+  // ---------- flow ----------
+  $('btn-start').addEventListener('click', startFlow);
+  $('btn-view-rank').addEventListener('click', ()=> showLeaderboard());
+  $('btn-play-again').addEventListener('click', resetToStart);
+  $('btn-skip-save').addEventListener('click', resetToStart);
+  $('btn-save').addEventListener('click', saveScoreAndShowRank);
+
+  async function startFlow(){
+    camError.classList.add('hidden');
+    $('btn-start').disabled = true;
+    $('btn-start').textContent = 'Meminta akses kamera...';
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:'user', width:{ideal:1280}, height:{ideal:960}}, audio:false
+      });
+      state.stream = stream;
+      video.srcObject = stream;
+      await video.play();
+      screenStart.classList.add('hidden');
+      gameWrap.classList.remove('hidden');
+
+      if(!handLandmarkerReady){
+        loadingOverlay.classList.remove('hidden');
+        try{
+          await modelLoadPromise;
+        }catch(e){
+          loadingOverlay.classList.add('hidden');
+          gameWrap.classList.add('hidden');
+          screenStart.classList.remove('hidden');
+          camError.textContent = '⚠️ Gagal memuatkan model AI tangan. Semak sambungan internet dan cuba lagi.';
+          camError.classList.remove('hidden');
+          $('btn-start').disabled = false;
+          $('btn-start').textContent = '🎮 Mula Main';
+          return;
+        }
+        loadingOverlay.classList.add('hidden');
+      }
+      runCountdown();
+    }catch(err){
+      camError.textContent = '⚠️ Tidak dapat akses kamera. Sila benarkan kebenaran kamera pada pelayar, kemudian cuba lagi.';
+      camError.classList.remove('hidden');
+    }finally{
+      $('btn-start').disabled = false;
+      $('btn-start').textContent = '🎮 Mula Main';
+    }
+  }
+
+  function runCountdown(){
+    countdownOverlay.classList.remove('hidden');
+    const seq = ['3','2','1','MULA!'];
+    let i = 0;
+    countdownOverlay.textContent = seq[i];
+    const iv = setInterval(()=>{
+      i++;
+      if(i >= seq.length){
+        clearInterval(iv);
+        countdownOverlay.classList.add('hidden');
+        beginGame();
+        return;
+      }
+      countdownOverlay.textContent = seq[i];
+    }, 700);
+  }
+
+  function beginGame(){
+    state.score = 0; state.combo = 0; state.maxCombo = 0;
+    state.timeLeft = state.roundDuration;
+    state.fruits = []; state.effects = [];
+    state.spawnTimer = 300; state.shake = 0; state.flash = 0;
+    state.hands = [];
+    state.running = true;
+    let lastTs = performance.now();
+
+    function loop(ts){
+      if(!state.running) return;
+      const dt = Math.min(0.05, (ts - lastTs) / 1000);
+      lastTs = ts;
+      detectHands(ts);
+      update(dt);
+      render();
+      if(state.running) requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- hand detection ----------
+  function detectHands(ts){
+    state.hands = [];
+    if(!handLandmarker || video.readyState < 2) return;
+    let result;
+    try{
+      result = handLandmarker.detectForVideo(video, ts);
+    }catch(e){
+      return;
+    }
+    if(!result || !result.landmarks) return;
+    for(const lm of result.landmarks){
+      const wrist = lm[0];
+      const mcpMid = lm[9];
+      // palm center = average of wrist + all 4 MCP joints (stable regardless of finger pose)
+      const idxs = [0,5,9,13,17];
+      let sx=0, sy=0;
+      for(const i of idxs){ sx += lm[i].x; sy += lm[i].y; }
+      const cx = (sx/idxs.length) * W;
+      const cy = (sy/idxs.length) * H;
+
+      // palm width (index MCP to pinky MCP) as a size reference, in canvas px
+      const palmW = Math.hypot((lm[5].x-lm[17].x)*W, (lm[5].y-lm[17].y)*H);
+      const radius = Math.max(24, palmW * 1.35);
+
+      // openness: count fingers whose tip is farther from the wrist than
+      // their pip joint by a margin (i.e. extended, not curled into a fist)
+      let extended = 0;
+      const wristDist = (i)=> Math.hypot((lm[i].x-wrist.x)*W, (lm[i].y-wrist.y)*H);
+      for(const [mcp,pip,dip,tip] of FINGERS){
+        if(wristDist(tip) > wristDist(pip) * 1.12) extended++;
+      }
+      const open = extended >= 3;
+
+      state.hands.push({cx, cy, r: radius, open, landmarks: lm});
+    }
+  }
+
+  function update(dt){
+    state.timeLeft -= dt;
+    if(state.timeLeft <= 0){
+      state.timeLeft = 0;
+      endGame();
+      return;
+    }
+    const elapsed = state.roundDuration - state.timeLeft;
+
+    // spawn
+    state.spawnTimer -= dt * 1000;
+    if(state.spawnTimer <= 0){
+      spawnFruit(elapsed);
+      const interval = Math.max(420, 1150 - elapsed * 14);
+      state.spawnTimer = interval + Math.random() * 200;
+    }
+
+    // move fruits
+    const baseSpeed = 130 + elapsed * 3.2;
+    for(const f of state.fruits){
+      f.y += baseSpeed * f.spd * dt;
+    }
+
+    // catch check: each OPEN hand can catch its single closest overlapping fruit
+    const openHands = state.hands.filter(h=>h.open);
+    const caughtThisFrame = new Set();
+    for(const hand of openHands){
+      let best = null, bestDist = Infinity;
+      for(const f of state.fruits){
+        if(caughtThisFrame.has(f)) continue;
+        const d = Math.hypot(f.x - hand.cx, f.y - hand.cy);
+        if(d < (f.r + hand.r * 0.65) && d < bestDist){
+          best = f; bestDist = d;
+        }
+      }
+      if(best){
+        caughtThisFrame.add(best);
+        handleCatch(best);
+        best.caught = true;
+      }
+    }
+
+    state.fruits = state.fruits.filter(f=>{
+      if(f.caught) return false;
+      if(f.y - f.r > H){
+        if(!f.bomb) state.combo = 0;
+        return false;
+      }
+      return true;
+    });
+
+    state.effects.forEach(e=> e.life -= dt);
+    state.effects = state.effects.filter(e=> e.life > 0);
+
+    if(state.shake > 0) state.shake -= dt * 4;
+    if(state.flash > 0) state.flash -= dt * 2;
+
+    hudScore.textContent = state.score;
+    hudTime.textContent = Math.ceil(state.timeLeft);
+    hudCombo.textContent = state.combo;
+  }
+
+  function spawnFruit(elapsed){
+    let type;
+    const bombChance = Math.min(0.28, 0.08 + elapsed * 0.004);
+    if(elapsed > 4 && Math.random() < bombChance){
+      type = BOMB;
+    } else {
+      type = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+    }
+    const r = type.r;
+    state.fruits.push({
+      x: r + Math.random() * (W - r * 2), y: -r, r: r,
+      emoji: type.emoji, pts: type.pts, spd: type.spd, bomb: !!type.bomb, caught: false,
+    });
+  }
+
+  function handleCatch(f){
+    if(f.bomb){
+      state.score = Math.max(0, state.score + f.pts);
+      state.combo = 0;
+      state.shake = 1; state.flash = 1;
+      addEffect(f.x, f.y, String(f.pts), '#ff5252');
+      beep(120, 0.25, 'sawtooth');
+    } else {
+      const mult = 1 + Math.floor(state.combo / 5) * 0.5;
+      const gained = Math.round(f.pts * mult);
+      state.score += gained;
+      state.combo += 1;
+      if(state.combo > state.maxCombo) state.maxCombo = state.combo;
+      addEffect(f.x, f.y, '+' + gained, '#ffd93d');
+      beep(500 + Math.min(state.combo, 20) * 20, 0.12, 'triangle');
+      if(state.combo > 0 && state.combo % 5 === 0) popCombo(state.combo);
+    }
+  }
+
+  function addEffect(x, y, text, color){
+    state.effects.push({x, y, text, color, life: 0.7, startLife: 0.7});
+  }
+
+  function popCombo(n){
+    comboPop.textContent = '🔥 Kombo x' + n + '!';
+    comboPop.style.opacity = '1';
+    clearTimeout(popCombo._t);
+    popCombo._t = setTimeout(()=>{ comboPop.style.opacity = '0'; }, 700);
+  }
+
+  function render(){
+    ctx.save();
+    if(state.shake > 0){
+      const s = state.shake * 8;
+      ctx.translate((Math.random()-0.5)*s, (Math.random()-0.5)*s);
+    }
+
+    if(video.readyState >= 2){
+      ctx.drawImage(video, 0, 0, W, H);
+    } else {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(0, 0, W, H);
+    }
+
+    // fruits
+    for(const f of state.fruits){
+      ctx.font = (f.r * 1.7) + 'px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.35)';
+      ctx.shadowBlur = 6;
+      ctx.fillText(f.emoji, f.x, f.y);
+      ctx.restore();
+    }
+
+    // hand indicators - green ring = open/catch-ready, gray dashed = closed/safe
+    for(const hand of state.hands){
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(hand.cx, hand.cy, hand.r * 0.65, 0, Math.PI * 2);
+      if(hand.open){
+        ctx.strokeStyle = 'rgba(90, 230, 120, 0.9)';
+        ctx.lineWidth = 4;
+      } else {
+        ctx.strokeStyle = 'rgba(200, 200, 200, 0.7)';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([6,6]);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // effects
+    for(const e of state.effects){
+      const t = 1 - (e.life / e.startLife);
+      ctx.globalAlpha = Math.max(0, 1 - t);
+      ctx.fillStyle = e.color;
+      ctx.font = '900 30px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(e.text, e.x, e.y - t * 40);
+      ctx.globalAlpha = 1;
+    }
+
+    ctx.restore();
+
+    if(state.flash > 0){
+      ctx.fillStyle = 'rgba(255,0,0,' + (state.flash * 0.35) + ')';
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function endGame(){
+    state.running = false;
+    $('final-score').textContent = state.score;
+    $('final-combo').textContent = 'Kombo terbaik: ' + state.maxCombo;
+    gameWrap.classList.add('hidden');
+    screenOver.classList.remove('hidden');
+    prefillName();
+  }
+
+  function prefillName(){
+    try{
+      const raw = localStorage.getItem(LAST_PLAYER_KEY);
+      if(raw){
+        const d = JSON.parse(raw);
+        $('input-name').value = d.name || '';
+        $('input-class').value = d.kelas || '';
+      }
+    }catch(e){}
+  }
+
+  function readLeaderboard(){
+    try{
+      const raw = localStorage.getItem(LB_KEY);
+      return raw ? JSON.parse(raw) : [];
+    }catch(e){ return []; }
+  }
+
+  function saveScoreAndShowRank(){
+    const name = $('input-name').value.trim() || 'Pemain Tanpa Nama';
+    const kelas = $('input-class').value.trim();
+    try{
+      localStorage.setItem(LAST_PLAYER_KEY, JSON.stringify({name, kelas}));
+      const entries = readLeaderboard();
+      entries.push({name, kelas, score: state.score, maxCombo: state.maxCombo, date: new Date().toISOString()});
+      entries.sort((a,b)=> b.score - a.score);
+      localStorage.setItem(LB_KEY, JSON.stringify(entries.slice(0, 50)));
+    }catch(e){
+      console.error('Storage error', e);
+    }
+    screenOver.classList.add('hidden');
+    showLeaderboard();
+  }
+
+  function showLeaderboard(){
+    screenStart.classList.add('hidden');
+    screenOver.classList.add('hidden');
+    screenRank.classList.remove('hidden');
+    const entries = readLeaderboard();
+    const top = entries.slice(0, 10);
+    $('rank-subtitle').textContent = entries.length ? '10 markah tertinggi (peranti ini)' : 'Belum ada markah lagi';
+    if(top.length === 0){
+      $('rank-list').innerHTML = '<div class="muted">Jadilah orang pertama masuk ranking!</div>';
+    } else {
+      const medals = ['🥇','🥈','🥉'];
+      let html = '<table class="rank">';
+      top.forEach((e, i)=>{
+        const medal = medals[i] || (i+1) + '.';
+        const cls = e.kelas ? (' <span class="muted">(' + escapeHtml(e.kelas) + ')</span>') : '';
+        html += '<tr><td>' + medal + '</td><td class="rank-name">' + escapeHtml(e.name) + cls + '</td><td class="rank-score">' + e.score + '</td></tr>';
+      });
+      html += '</table>';
+      $('rank-list').innerHTML = html;
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function resetToStart(){
+    if(state.stream){
+      state.stream.getTracks().forEach(t=> t.stop());
+      state.stream = null;
+    }
+    screenRank.classList.add('hidden');
+    screenOver.classList.add('hidden');
+    gameWrap.classList.add('hidden');
+    screenStart.classList.remove('hidden');
+  }
+</script>
+</body>
+</html>
