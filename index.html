@@ -187,7 +187,6 @@
     <div class="rules">
       <div>📷 <b>Berdiri sekurang-kurangnya 2 meter</b> supaya badan & tangan kelihatan penuh.</div>
       <div>✋ <b>Buka tangan</b> untuk tangkap buah — genggam tangan = tak tangkap.</div>
-      <div>💣 <b>Elak bom</b> — genggam tangan bila lalu dekat bom supaya selamat!</div>
       <div>🏆 Markah tertinggi masuk <b>Papan Ranking</b> (peranti ini).</div>
     </div>
     <div class="duration-row" id="duration-row">
@@ -225,7 +224,7 @@
       <button id="btn-calibrate-distance" class="calibrate-btn" type="button" disabled>Sahkan jarak 2 meter</button>
       <div class="distance-note">Semakan ini menggunakan saiz tapak tangan sebagai rujukan. Pastikan kamera tidak dialihkan selepas kalibrasi.</div>
     </div>
-    <div id="distance-warning" class="hidden">Undur sedikit — kekalkan jarak sekurang-kurangnya 2 meter.</div>
+    <div id="distance-warning" class="hidden">ALERT: Undur sedikit — kekalkan jarak sekurang-kurangnya 2 meter.</div>
   </div>
 
   <!-- GAME OVER SCREEN -->
@@ -272,8 +271,6 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     {emoji:'🍉', pts:8,  r:36, spd:0.8},
     {emoji:'🍓', pts:25, r:18, spd:1.4},
   ];
-  const BOMB = {emoji:'💣', pts:-20, r:28, spd:1.05, bomb:true};
-
   // finger landmark groups: [mcp, pip, dip, tip]
   const FINGERS = [
     [5,6,7,8],    // index
@@ -287,7 +284,7 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     roundDuration:45,
     score:0, combo:0, maxCombo:0, timeLeft:45,
     fruits:[], effects:[], spawnTimer:0,
-    running:false, shake:0, flash:0, stream:null,
+    running:false, stream:null,
     hands:[], // {cx,cy,r,palmW,open}
     calibrating:false, calibrationSamples:[], calibratedPalmWidth:0,
     tooClose:false, closeFrames:0, clearFrames:0,
@@ -535,7 +532,7 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     state.score = 0; state.combo = 0; state.maxCombo = 0;
     state.timeLeft = state.roundDuration;
     state.fruits = []; state.effects = [];
-    state.spawnTimer = 300; state.shake = 0; state.flash = 0;
+    state.spawnTimer = 300;
     state.hands = [];
     state.tooClose = false; state.closeFrames = 0; state.clearFrames = 0;
     distanceWarning.classList.add('hidden');
@@ -593,12 +590,8 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   }
 
   function update(dt){
-    if(updateDistanceGuard()){
-      hudScore.textContent = state.score;
-      hudTime.textContent = Math.ceil(state.timeLeft);
-      hudCombo.textContent = state.combo;
-      return;
-    }
+    // The distance check is an alert only: it never pauses the game or timer.
+    updateDistanceGuard();
     state.timeLeft -= dt;
     if(state.timeLeft <= 0){
       state.timeLeft = 0;
@@ -643,11 +636,10 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     }
 
     state.fruits = state.fruits.filter(f=>{
-      // Remove only the exact fruit that was caught.  A bomb must never
-      // reset or remove the other fruit sprites already on screen.
+      // Remove only the exact fruit that was caught.
       if(caughtFruits.has(f)) return false;
       if(f.y - f.r > H){
-        if(!f.bomb) state.combo = 0;
+        state.combo = 0;
         return false;
       }
       return true;
@@ -655,9 +647,6 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
     state.effects.forEach(e=> e.life -= dt);
     state.effects = state.effects.filter(e=> e.life > 0);
-
-    if(state.shake > 0) state.shake -= dt * 4;
-    if(state.flash > 0) state.flash -= dt * 2;
 
     hudScore.textContent = state.score;
     hudTime.textContent = Math.ceil(state.timeLeft);
@@ -684,37 +673,23 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   }
 
   function spawnFruit(elapsed){
-    let type;
-    const bombChance = Math.min(0.28, 0.08 + elapsed * 0.004);
-    if(elapsed > 4 && Math.random() < bombChance){
-      type = BOMB;
-    } else {
-      type = FRUITS[Math.floor(Math.random() * FRUITS.length)];
-    }
+    const type = FRUITS[Math.floor(Math.random() * FRUITS.length)];
     const r = type.r;
     state.fruits.push({
       x: r + Math.random() * (W - r * 2), y: -r, r: r,
-      emoji: type.emoji, pts: type.pts, spd: type.spd, bomb: !!type.bomb,
+      emoji: type.emoji, pts: type.pts, spd: type.spd,
     });
   }
 
   function handleCatch(f){
-    if(f.bomb){
-      state.score = Math.max(0, state.score + f.pts);
-      state.combo = 0;
-      state.shake = 1; state.flash = 1;
-      addEffect(f.x, f.y, String(f.pts), '#ff5252');
-      beep(120, 0.25, 'sawtooth');
-    } else {
-      const mult = 1 + Math.floor(state.combo / 5) * 0.5;
-      const gained = Math.round(f.pts * mult);
-      state.score += gained;
-      state.combo += 1;
-      if(state.combo > state.maxCombo) state.maxCombo = state.combo;
-      addEffect(f.x, f.y, '+' + gained, '#ffd93d');
-      beep(500 + Math.min(state.combo, 20) * 20, 0.12, 'triangle');
-      if(state.combo > 0 && state.combo % 5 === 0) popCombo(state.combo);
-    }
+    const mult = 1 + Math.floor(state.combo / 5) * 0.5;
+    const gained = Math.round(f.pts * mult);
+    state.score += gained;
+    state.combo += 1;
+    if(state.combo > state.maxCombo) state.maxCombo = state.combo;
+    addEffect(f.x, f.y, '+' + gained, '#ffd93d');
+    beep(500 + Math.min(state.combo, 20) * 20, 0.12, 'triangle');
+    if(state.combo > 0 && state.combo % 5 === 0) popCombo(state.combo);
   }
 
   function addEffect(x, y, text, color){
@@ -729,18 +704,12 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   }
 
   function render(){
-    // Effects such as the bomb flash must never leak a canvas alpha,
-    // transform, or blend mode into the fruit sprites in the next frame.
+    // Reset the canvas state so no visual effect can leak into fruit sprites.
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, W, H);
     ctx.save();
-    if(state.shake > 0){
-      const s = state.shake * 8;
-      ctx.translate((Math.random()-0.5)*s, (Math.random()-0.5)*s);
-    }
-
     if(video.readyState >= 2){
       ctx.drawImage(video, 0, 0, W, H);
     } else {
@@ -792,16 +761,6 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
     ctx.restore();
 
-    // restore() returns the context to the state from the previous frame.
-    // Reset it again before painting the red bomb flash on top.
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-
-    if(state.flash > 0){
-      ctx.fillStyle = 'rgba(255,0,0,' + (state.flash * 0.35) + ')';
-      ctx.fillRect(0, 0, W, H);
-    }
   }
 
   function endGame(){
