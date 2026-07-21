@@ -138,11 +138,6 @@
   #distance-overlay strong{font-size:1.35em;}
   #distance-overlay p{max-width:470px;margin:0;line-height:1.45;}
   #distance-overlay .distance-note{font-size:.82em;font-weight:600;opacity:.9;}
-  #distance-overlay .calibrate-btn{
-    background:var(--sun);color:#54310e;border:0;border-radius:14px;padding:12px 18px;
-    font:800 1em inherit;cursor:pointer;box-shadow:0 4px 0 #bc8e16;
-  }
-  #distance-overlay .calibrate-btn:disabled{opacity:.65;cursor:not-allowed;}
   #distance-message{min-height:1.3em;color:#ffd93d;}
   #distance-warning{
     position:absolute;z-index:2;left:50%;bottom:16px;transform:translateX(-50%);max-width:90%;
@@ -187,12 +182,34 @@
     <div class="rules">
       <div>📷 <b>Berdiri sekurang-kurangnya 2 meter</b> supaya badan & tangan kelihatan penuh.</div>
       <div>✋ <b>Buka tangan</b> untuk tangkap buah — genggam tangan = tak tangkap.</div>
-      <div>🏆 Markah tertinggi masuk <b>Papan Ranking</b> (peranti ini).</div>
+      <div>💣 <b>Jangan tampar bom!</b> Meletup = tolak markah/nyawa & kombo hilang.</div>
+      <div>🏆 Markah/masa terbaik masuk <b>Papan Ranking</b> (peranti ini).</div>
     </div>
-    <div class="duration-row" id="duration-row">
-      <button class="dur-btn" data-d="30">30 saat</button>
-      <button class="dur-btn active" data-d="45">45 saat</button>
-      <button class="dur-btn" data-d="60">60 saat</button>
+    <div class="duration-row" id="mode-row">
+      <button class="dur-btn active" data-mode="normal">🍎 Normal</button>
+      <button class="dur-btn" data-mode="survival">💀 Survival</button>
+    </div>
+    <div id="normal-options">
+      <div class="duration-row" id="duration-row">
+        <button class="dur-btn" data-d="30">30 saat</button>
+        <button class="dur-btn active" data-d="45">45 saat</button>
+        <button class="dur-btn" data-d="60">60 saat</button>
+      </div>
+      <div class="field">
+        <label>Kelajuan</label>
+        <select id="speed-select">
+          <option value="1">x1 speed</option>
+          <option value="1.5">x1.5 speed</option>
+          <option value="2">x2 speed</option>
+          <option value="2.5">x2.5 speed</option>
+          <option value="3">x3 speed</option>
+        </select>
+      </div>
+    </div>
+    <div id="survival-options" class="rules hidden">
+      <div>❤️❤️❤️ <b>3 nyawa</b> — buah jatuh ke bawah atau kena bom = tolak 1 nyawa.</div>
+      <div>⏱️ <b>Tiada had masa</b> — bertahan selama mungkin.</div>
+      <div>⚡ Kelajuan naik <b>20%</b> setiap 10 saat.</div>
     </div>
     <button class="big-btn" id="btn-start">🎮 Mula Main</button>
     <div><button class="ghost-btn" id="btn-view-rank">🏆 Lihat Ranking</button></div>
@@ -205,7 +222,8 @@
     <canvas id="game-canvas" width="640" height="480"></canvas>
     <div id="hud">
       <div class="chip"><small>SKOR</small><span id="hud-score">0</span></div>
-      <div class="chip"><small>MASA</small><span id="hud-time">45</span></div>
+      <div class="chip" id="hud-time-chip"><small>MASA</small><span id="hud-time">45</span></div>
+      <div class="chip hidden" id="hud-lives-chip"><small>NYAWA</small><span id="hud-lives">❤️❤️❤️</span></div>
       <div class="chip"><small>KOMBO</small><span id="hud-combo">0</span></div>
       <button id="fullscreen-btn" type="button" title="Skrin penuh landskap" aria-label="Skrin penuh landskap">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5h4V3H4a2 2 0 0 0-2 2v4h2Zm12-6v2h4v4h2V5a2 2 0 0 0-2-2h-4ZM4 15H2v4a2 2 0 0 0 2 2h4v-2H4v-4Zm16 0v4h-4v2h4a2 2 0 0 0 2-2v-4h-2Z"/></svg>
@@ -219,9 +237,8 @@
     </div>
     <div id="distance-overlay" class="hidden">
       <strong>Semakan jarak kamera</strong>
-      <p>Letakkan murid di tanda <b>2 meter</b> dari kamera, kemudian angkat satu tapak tangan terbuka di paras dada.</p>
+      <p>Berdiri di tanda <b>2 meter</b> dari kamera, kemudian angkat satu tapak tangan terbuka di paras dada. Permainan akan mula sendiri.</p>
       <div id="distance-message">Mencari tangan...</div>
-      <button id="btn-calibrate-distance" class="calibrate-btn" type="button" disabled>Sahkan jarak 2 meter</button>
       <div class="distance-note">Semakan ini menggunakan saiz tapak tangan sebagai rujukan. Pastikan kamera tidak dialihkan selepas kalibrasi.</div>
     </div>
     <div id="distance-warning" class="hidden">ALERT: Undur sedikit — kekalkan jarak sekurang-kurangnya 2 meter.</div>
@@ -229,9 +246,10 @@
 
   <!-- GAME OVER SCREEN -->
   <div id="screen-gameover" class="card hidden">
-    <h1>⏰ Masa Tamat!</h1>
+    <h1 id="gameover-title">⏰ Masa Tamat!</h1>
     <div class="subtitle">Syabas atas usaha kamu!</div>
     <div class="score-final" id="final-score">0</div>
+    <div class="muted" id="final-time"></div>
     <div class="muted" id="final-combo">Kombo terbaik: 0</div>
     <div class="field">
       <label>Nama Pemain</label>
@@ -248,6 +266,10 @@
   <!-- LEADERBOARD SCREEN -->
   <div id="screen-leaderboard" class="card hidden">
     <h1>🏆 Papan Ranking</h1>
+    <div class="duration-row" id="rank-mode-row">
+      <button class="dur-btn active" data-mode="normal">🍎 Normal</button>
+      <button class="dur-btn" data-mode="survival">💀 Survival</button>
+    </div>
     <div class="subtitle" id="rank-subtitle">10 markah tertinggi (peranti ini)</div>
     <div id="rank-list">Memuatkan...</div>
     <button class="big-btn" id="btn-play-again">🔁 Main Lagi</button>
@@ -260,8 +282,13 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
   // ---------- constants ----------
   const W = 640, H = 480;
-  const LB_KEY = 'tangkap-buah-leaderboard';
+  const LB_KEYS = { normal: 'tangkap-buah-lb-normal', survival: 'tangkap-buah-lb-survival' };
   const LAST_PLAYER_KEY = 'tangkap-buah-last-player';
+  // Unified speed model: BASE_* apply at 1x. Normal mode fixes the multiplier
+  // from the dropdown; Survival mode ramps it up automatically over time.
+  const BASE_FALL = 190;   // px/s at 1x
+  const BASE_SPAWN = 1050; // ms between spawns at 1x
+  const MIN_SPAWN = 380;   // fastest allowed spawn interval
 
   const FRUITS = [
     {emoji:'🍎', pts:10, r:27, spd:1.0},
@@ -281,12 +308,15 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
   // ---------- state ----------
   const state = {
+    mode:'normal', // 'normal' | 'survival'
+    speedMult:1,   // fixed multiplier chosen for Normal mode
     roundDuration:45,
     score:0, combo:0, maxCombo:0, timeLeft:45,
+    lives:3, elapsed:0,
     fruits:[], effects:[], spawnTimer:0,
     running:false, stream:null,
     hands:[], // {cx,cy,r,palmW,open}
-    calibrating:false, calibrationSamples:[], calibratedPalmWidth:0,
+    calibrating:false, calibrationSamples:[], calibratedPalmWidth:0, openStableFrames:0,
     tooClose:false, closeFrames:0, clearFrames:0,
   };
 
@@ -301,12 +331,18 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   const canvas = $('game-canvas');
   const ctx = canvas.getContext('2d');
   const hudScore = $('hud-score'), hudTime = $('hud-time'), hudCombo = $('hud-combo');
+  const hudTimeChip = $('hud-time-chip'), hudLivesChip = $('hud-lives-chip'), hudLives = $('hud-lives');
+  const modeRow = $('mode-row');
+  const normalOptions = $('normal-options');
+  const survivalOptions = $('survival-options');
+  const speedSelect = $('speed-select');
+  const rankModeRow = $('rank-mode-row');
+  let rankViewMode = 'normal';
   const comboPop = $('combo-pop');
   const countdownOverlay = $('countdown-overlay');
   const loadingOverlay = $('loading-overlay');
   const distanceOverlay = $('distance-overlay');
   const distanceMessage = $('distance-message');
-  const calibrateDistanceBtn = $('btn-calibrate-distance');
   const distanceWarning = $('distance-warning');
   const fullscreenBtn = $('fullscreen-btn');
   const fullscreenStartBtn = $('fullscreen-start-btn');
@@ -325,14 +361,31 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     }catch(e){}
   }
 
-  // ---------- duration buttons ----------
-  document.querySelectorAll('.dur-btn').forEach(btn=>{
+  // ---------- mode buttons ----------
+  modeRow.querySelectorAll('.dur-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      document.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('active'));
+      modeRow.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state.mode = btn.dataset.mode;
+      normalOptions.classList.toggle('hidden', state.mode !== 'normal');
+      survivalOptions.classList.toggle('hidden', state.mode !== 'survival');
+    });
+  });
+
+  // ---------- duration buttons ----------
+  document.querySelectorAll('#duration-row .dur-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('#duration-row .dur-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       state.roundDuration = parseInt(btn.dataset.d, 10);
     });
   });
+
+  // ---------- speed dropdown ----------
+  speedSelect.addEventListener('change', ()=>{
+    state.speedMult = parseFloat(speedSelect.value);
+  });
+  state.speedMult = parseFloat(speedSelect.value);
 
   // ---------- MediaPipe HandLandmarker setup ----------
   let handLandmarker = null;
@@ -367,11 +420,13 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
   // ---------- flow ----------
   $('btn-start').addEventListener('click', startFlow);
-  $('btn-view-rank').addEventListener('click', ()=> showLeaderboard());
+  $('btn-view-rank').addEventListener('click', ()=> showLeaderboard(state.mode));
+  rankModeRow.querySelectorAll('.dur-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> showLeaderboard(btn.dataset.mode));
+  });
   $('btn-play-again').addEventListener('click', resetToStart);
   $('btn-skip-save').addEventListener('click', resetToStart);
   $('btn-save').addEventListener('click', saveScoreAndShowRank);
-  calibrateDistanceBtn.addEventListener('click', confirmDistanceCalibration);
   fullscreenBtn.addEventListener('click', toggleFullscreen);
   fullscreenStartBtn.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', syncFullscreenButton);
@@ -424,13 +479,18 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     state.calibrating = true;
     state.calibrationSamples = [];
     state.calibratedPalmWidth = 0;
+    state.openStableFrames = 0;
     state.tooClose = false;
     state.closeFrames = 0;
     state.clearFrames = 0;
     distanceMessage.textContent = 'Mencari tangan...';
-    calibrateDistanceBtn.disabled = true;
     distanceOverlay.classList.remove('hidden');
     distanceWarning.classList.add('hidden');
+
+    // Auto-start: once an open hand has been detected steadily for roughly a
+    // second (a solo player cannot press a button while holding the 2 m mark),
+    // the countdown begins on its own.
+    const STABLE_FRAMES_NEEDED = 18;
 
     function calibrationLoop(ts){
       if(!state.calibrating) return;
@@ -441,13 +501,21 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
       if(widestPalm > 0){
         state.calibrationSamples.push(widestPalm);
         if(state.calibrationSamples.length > 18) state.calibrationSamples.shift();
+        state.openStableFrames++;
+      } else {
+        // Lost the open hand before it was steady - require it to settle again.
+        state.openStableFrames = 0;
       }
-      const ready = state.calibrationSamples.length >= 5;
-      calibrateDistanceBtn.disabled = !ready;
-      distanceMessage.textContent = ready
-        ? 'Tangan dikesan. Sahkan apabila murid berada pada tanda 2 meter.'
-        : 'Mencari tangan terbuka...';
+      const enoughSamples = state.calibrationSamples.length >= 5;
+      const steady = enoughSamples && state.openStableFrames >= STABLE_FRAMES_NEEDED;
+      distanceMessage.textContent = steady
+        ? 'Tangan dikesan. Bersedia...'
+        : (state.openStableFrames > 0 ? 'Tangan dikesan, kekalkan sebentar...' : 'Mencari tangan terbuka...');
       render();
+      if(steady){
+        confirmDistanceCalibration();
+        return;
+      }
       requestAnimationFrame(calibrationLoop);
     }
     requestAnimationFrame(calibrationLoop);
@@ -531,11 +599,16 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   function beginGame(){
     state.score = 0; state.combo = 0; state.maxCombo = 0;
     state.timeLeft = state.roundDuration;
+    state.lives = 3; state.elapsed = 0;
     state.fruits = []; state.effects = [];
     state.spawnTimer = 300;
     state.hands = [];
     state.tooClose = false; state.closeFrames = 0; state.clearFrames = 0;
     distanceWarning.classList.add('hidden');
+    const survival = state.mode === 'survival';
+    hudTimeChip.classList.toggle('hidden', survival);
+    hudLivesChip.classList.toggle('hidden', !survival);
+    if(survival) hudLives.textContent = '❤️'.repeat(state.lives);
     state.running = true;
     let lastTs = performance.now();
 
@@ -592,27 +665,35 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   function update(dt){
     // The distance check is an alert only: it never pauses the game or timer.
     updateDistanceGuard();
-    state.timeLeft -= dt;
-    if(state.timeLeft <= 0){
-      state.timeLeft = 0;
-      endGame();
-      return;
+    const survival = state.mode === 'survival';
+    state.elapsed += dt;
+    if(!survival){
+      state.timeLeft -= dt;
+      if(state.timeLeft <= 0){
+        state.timeLeft = 0;
+        endGame();
+        return;
+      }
     }
-    const elapsed = state.roundDuration - state.timeLeft;
+
+    // Normal mode: fixed multiplier chosen at the start screen.
+    // Survival mode: no fixed multiplier - it climbs 20% every 10s survived.
+    const speedMult = survival
+      ? Math.pow(1.2, Math.floor(state.elapsed / 10))
+      : state.speedMult;
 
     // spawn
     state.spawnTimer -= dt * 1000;
     if(state.spawnTimer <= 0){
-      spawnFruit(elapsed);
-      const interval = Math.max(420, 1150 - elapsed * 14);
+      spawnFruit();
+      const interval = Math.max(MIN_SPAWN, BASE_SPAWN / speedMult);
       state.spawnTimer = interval + Math.random() * 200;
     }
 
     // move fruits
-    // Start briskly, then become noticeably harder as the round continues.
-    const baseSpeed = Math.min(520, 150 + elapsed * 6);
+    const fallSpeed = BASE_FALL * speedMult;
     for(const f of state.fruits){
-      f.y += baseSpeed * f.spd * dt;
+      f.y += fallSpeed * f.spd * dt;
     }
 
     // catch check: each OPEN hand can catch its single closest overlapping fruit
@@ -631,26 +712,46 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
       }
       if(best){
         caughtFruits.add(best);
-        handleCatch(best);
+        if(best.isBomb) handleBomb(best);
+        else handleCatch(best);
       }
     }
 
+    let lifeLost = false;
     state.fruits = state.fruits.filter(f=>{
       // Remove only the exact fruit that was caught.
       if(caughtFruits.has(f)) return false;
       if(f.y - f.r > H){
-        state.combo = 0;
+        // Only a missed fruit breaks the combo; a bomb falling off-screen
+        // is exactly what the player wants, so leave the combo intact.
+        if(!f.isBomb){
+          state.combo = 0;
+          // Survival mode: fruit is not allowed to fall past the bottom.
+          if(survival) lifeLost = true;
+        }
         return false;
       }
       return true;
     });
+    if(lifeLost) loseLife();
 
     state.effects.forEach(e=> e.life -= dt);
     state.effects = state.effects.filter(e=> e.life > 0);
 
     hudScore.textContent = state.score;
-    hudTime.textContent = Math.ceil(state.timeLeft);
     hudCombo.textContent = state.combo;
+    if(survival){
+      hudLives.textContent = '❤️'.repeat(Math.max(0, state.lives));
+    } else {
+      hudTime.textContent = Math.ceil(state.timeLeft);
+    }
+    if(state.running && survival && state.lives <= 0) endGame();
+  }
+
+  // Survival mode: shared life-loss handling (missed fruit or bomb hit).
+  // Guards against double-ending when multiple lives are lost in one frame.
+  function loseLife(){
+    state.lives = Math.max(0, state.lives - 1);
   }
 
   function updateDistanceGuard(){
@@ -673,6 +774,15 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   }
 
   function spawnFruit(elapsed){
+    // Roughly one in four drops is a bomb: do NOT catch these with an open hand.
+    if(Math.random() < 0.25){
+      const r = 26;
+      state.fruits.push({
+        x: r + Math.random() * (W - r * 2), y: -r, r: r,
+        isBomb: true, spd: 1.0,
+      });
+      return;
+    }
     const type = FRUITS[Math.floor(Math.random() * FRUITS.length)];
     const r = type.r;
     state.fruits.push({
@@ -690,6 +800,21 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     addEffect(f.x, f.y, '+' + gained, '#ffd93d');
     beep(500 + Math.min(state.combo, 20) * 20, 0.12, 'triangle');
     if(state.combo > 0 && state.combo % 5 === 0) popCombo(state.combo);
+  }
+
+  function handleBomb(f){
+    // Hitting a bomb always drops the combo. Normal mode pays for it in
+    // points; Survival mode pays for it in lives.
+    if(state.mode === 'survival') loseLife();
+    else state.score = Math.max(0, state.score - 30);
+    state.combo = 0;
+    addEffect(f.x, f.y, '-30', '#ff5a3c');
+    state.effects.push({x: f.x, y: f.y, boom: true, life: 0.5, startLife: 0.5});
+    beep(90, 0.35, 'sawtooth');
+    comboPop.textContent = '💥 BOOM!';
+    comboPop.style.opacity = '1';
+    clearTimeout(popCombo._t);
+    popCombo._t = setTimeout(()=>{ comboPop.style.opacity = '0'; }, 700);
   }
 
   function addEffect(x, y, text, color){
@@ -717,10 +842,14 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
       ctx.fillRect(0, 0, W, H);
     }
 
-    // fruits
+    // fruits & bombs
     ctx.globalAlpha = 1;
     ctx.globalCompositeOperation = 'source-over';
     for(const f of state.fruits){
+      if(f.isBomb){
+        drawBomb(f.x, f.y, f.r);
+        continue;
+      }
       ctx.font = (f.r * 1.7) + 'px serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -751,6 +880,23 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     // effects
     for(const e of state.effects){
       const t = 1 - (e.life / e.startLife);
+      if(e.boom){
+        // Expanding explosion flash for a hit bomb.
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - t);
+        const rad = e.r * (0.4 + t * 1.6) || 26 * (0.4 + t * 1.6);
+        const grad = ctx.createRadialGradient(e.x, e.y, 2, e.x, e.y, rad);
+        grad.addColorStop(0, 'rgba(255,240,150,0.95)');
+        grad.addColorStop(0.5, 'rgba(255,120,30,0.8)');
+        grad.addColorStop(1, 'rgba(200,40,20,0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, rad, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = 1;
+        continue;
+      }
       ctx.globalAlpha = Math.max(0, 1 - t);
       ctx.fillStyle = e.color;
       ctx.font = '900 30px system-ui, sans-serif';
@@ -763,12 +909,91 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
   }
 
+  // Cartoon bomb drawn directly on the canvas: glossy black round body, a short
+  // metal cap, a curved fuse and a flickering spark. Centred on (x, y).
+  function drawBomb(x, y, r){
+    ctx.save();
+    ctx.translate(x, y);
+
+    // drop shadow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.4)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+
+    // round body
+    const body = ctx.createRadialGradient(-r*0.35, -r*0.35, r*0.15, 0, 0, r);
+    body.addColorStop(0, '#5a5f66');
+    body.addColorStop(0.45, '#2b2f36');
+    body.addColorStop(1, '#0c0e12');
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+
+    // metal cap on top
+    const capW = r * 0.5, capH = r * 0.32;
+    const cap = ctx.createLinearGradient(-capW/2, 0, capW/2, 0);
+    cap.addColorStop(0, '#8a8f96');
+    cap.addColorStop(0.5, '#c7ccd2');
+    cap.addColorStop(1, '#6b7076');
+    ctx.fillStyle = cap;
+    ctx.beginPath();
+    const capY = -r * 0.92;
+    if(ctx.roundRect){
+      ctx.roundRect(-capW/2, capY, capW, capH, 3);
+    } else {
+      ctx.rect(-capW/2, capY, capW, capH);
+    }
+    ctx.fill();
+
+    // fuse (curved) rising up-right from the cap
+    ctx.strokeStyle = '#7a5230';
+    ctx.lineWidth = Math.max(2.5, r * 0.12);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const fx = r * 0.12, fy = capY;
+    ctx.moveTo(fx, fy);
+    ctx.quadraticCurveTo(fx + r*0.55, fy - r*0.35, fx + r*0.25, fy - r*0.8);
+    ctx.stroke();
+
+    // flickering spark at the fuse tip
+    const tipX = fx + r*0.25, tipY = fy - r*0.8;
+    const flick = 0.75 + Math.random() * 0.5;
+    const spark = ctx.createRadialGradient(tipX, tipY, 0, tipX, tipY, r*0.55*flick);
+    spark.addColorStop(0, '#fff7cc');
+    spark.addColorStop(0.4, '#ffcf3d');
+    spark.addColorStop(0.75, '#ff7a1a');
+    spark.addColorStop(1, 'rgba(255,120,20,0)');
+    ctx.fillStyle = spark;
+    ctx.beginPath();
+    ctx.arc(tipX, tipY, r*0.55*flick, 0, Math.PI * 2);
+    ctx.fill();
+
+    // glossy highlight on the body
+    ctx.fillStyle = 'rgba(255,255,255,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(-r*0.32, -r*0.34, r*0.24, r*0.15, -0.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
   function endGame(){
     state.running = false;
     distanceWarning.classList.add('hidden');
     leaveFullscreen();
+    const survival = state.mode === 'survival';
     $('final-score').textContent = state.score;
     $('final-combo').textContent = 'Kombo terbaik: ' + state.maxCombo;
+    if(survival){
+      $('gameover-title').textContent = '💀 Nyawa Habis!';
+      $('final-time').textContent = 'Bertahan selama: ' + Math.floor(state.elapsed) + ' saat';
+    } else {
+      $('gameover-title').textContent = '⏰ Masa Tamat!';
+      $('final-time').textContent = '';
+    }
     gameWrap.classList.add('hidden');
     screenOver.classList.remove('hidden');
     prefillName();
@@ -785,9 +1010,9 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     }catch(e){}
   }
 
-  function readLeaderboard(){
+  function readLeaderboard(mode){
     try{
-      const raw = localStorage.getItem(LB_KEY);
+      const raw = localStorage.getItem(LB_KEYS[mode]);
       return raw ? JSON.parse(raw) : [];
     }catch(e){ return []; }
   }
@@ -795,26 +1020,38 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   function saveScoreAndShowRank(){
     const name = $('input-name').value.trim() || 'Pemain Tanpa Nama';
     const kelas = $('input-class').value.trim();
+    const mode = state.mode;
     try{
       localStorage.setItem(LAST_PLAYER_KEY, JSON.stringify({name, kelas}));
-      const entries = readLeaderboard();
-      entries.push({name, kelas, score: state.score, maxCombo: state.maxCombo, date: new Date().toISOString()});
-      entries.sort((a,b)=> b.score - a.score);
-      localStorage.setItem(LB_KEY, JSON.stringify(entries.slice(0, 50)));
+      const entries = readLeaderboard(mode);
+      if(mode === 'survival'){
+        entries.push({name, kelas, time: Math.floor(state.elapsed), score: state.score, maxCombo: state.maxCombo, date: new Date().toISOString()});
+        entries.sort((a,b)=> b.time - a.time);
+      } else {
+        entries.push({name, kelas, score: state.score, maxCombo: state.maxCombo, date: new Date().toISOString()});
+        entries.sort((a,b)=> b.score - a.score);
+      }
+      localStorage.setItem(LB_KEYS[mode], JSON.stringify(entries.slice(0, 50)));
     }catch(e){
       console.error('Storage error', e);
     }
     screenOver.classList.add('hidden');
-    showLeaderboard();
+    showLeaderboard(mode);
   }
 
-  function showLeaderboard(){
+  function showLeaderboard(mode){
+    rankViewMode = mode || rankViewMode;
+    rankModeRow.querySelectorAll('.dur-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.mode === rankViewMode);
+    });
     screenStart.classList.add('hidden');
     screenOver.classList.add('hidden');
     screenRank.classList.remove('hidden');
-    const entries = readLeaderboard();
+    const survival = rankViewMode === 'survival';
+    const entries = readLeaderboard(rankViewMode);
     const top = entries.slice(0, 10);
-    $('rank-subtitle').textContent = entries.length ? '10 markah tertinggi (peranti ini)' : 'Belum ada markah lagi';
+    const label = survival ? '10 masa bertahan terbaik (peranti ini)' : '10 markah tertinggi (peranti ini)';
+    $('rank-subtitle').textContent = entries.length ? label : 'Belum ada rekod lagi';
     if(top.length === 0){
       $('rank-list').innerHTML = '<div class="muted">Jadilah orang pertama masuk ranking!</div>';
     } else {
@@ -823,7 +1060,8 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
       top.forEach((e, i)=>{
         const medal = medals[i] || (i+1) + '.';
         const cls = e.kelas ? (' <span class="muted">(' + escapeHtml(e.kelas) + ')</span>') : '';
-        html += '<tr><td>' + medal + '</td><td class="rank-name">' + escapeHtml(e.name) + cls + '</td><td class="rank-score">' + e.score + '</td></tr>';
+        const value = survival ? (e.time + ' saat') : e.score;
+        html += '<tr><td>' + medal + '</td><td class="rank-name">' + escapeHtml(e.name) + cls + '</td><td class="rank-score">' + value + '</td></tr>';
       });
       html += '</table>';
       $('rank-list').innerHTML = html;
