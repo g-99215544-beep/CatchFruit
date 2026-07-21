@@ -313,6 +313,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     roundDuration:45,
     score:0, combo:0, maxCombo:0, timeLeft:45,
     lives:3, elapsed:0,
+    flash:0, shake:0, // red flash + screen-shake feedback when a life is lost
     fruits:[], effects:[], spawnTimer:0,
     running:false, stream:null,
     hands:[], // {cx,cy,r,palmW,open}
@@ -637,6 +638,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     state.score = 0; state.combo = 0; state.maxCombo = 0;
     state.timeLeft = state.roundDuration;
     state.lives = 3; state.elapsed = 0;
+    state.flash = 0; state.shake = 0;
     state.fruits = []; state.effects = [];
     state.spawnTimer = 300;
     state.hands = [];
@@ -810,6 +812,10 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     state.effects.forEach(e=> e.life -= dt);
     state.effects = state.effects.filter(e=> e.life > 0);
 
+    // decay life-lost feedback
+    if(state.flash > 0) state.flash = Math.max(0, state.flash - dt * 2.2);
+    if(state.shake > 0) state.shake = Math.max(0, state.shake - dt * 3.5);
+
     hudScore.textContent = state.score;
     hudCombo.textContent = state.combo;
     if(survival){
@@ -824,6 +830,12 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
   // Guards against double-ending when multiple lives are lost in one frame.
   function loseLife(){
     state.lives = Math.max(0, state.lives - 1);
+    // Clear feedback so the player notices a life was deducted:
+    // a red screen flash, a short shake, and a low "hurt" sound.
+    state.flash = 1;
+    state.shake = 1;
+    beep(160, 0.18, 'square');
+    setTimeout(()=> beep(110, 0.22, 'square'), 90);
   }
 
   function updateDistanceGuard(){
@@ -907,11 +919,19 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     ctx.globalCompositeOperation = 'source-over';
     ctx.clearRect(0, 0, W, H);
     ctx.save();
+    // Screen shake: jitter the whole scene; overscan the video so no black
+    // edge shows through while it is offset.
+    let pad = 0;
+    if(state.shake > 0){
+      const mag = state.shake * 9;
+      pad = 14;
+      ctx.translate((Math.random()*2-1)*mag, (Math.random()*2-1)*mag);
+    }
     if(video.readyState >= 2){
-      ctx.drawImage(video, 0, 0, W, H);
+      ctx.drawImage(video, -pad, -pad, W + pad*2, H + pad*2);
     } else {
       ctx.fillStyle = '#222';
-      ctx.fillRect(0, 0, W, H);
+      ctx.fillRect(-pad, -pad, W + pad*2, H + pad*2);
     }
 
     // avatar over the player's head (drawn under the fruits so fruit stays visible)
@@ -981,6 +1001,17 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     }
 
     ctx.restore();
+
+    // Red flash overlay (full screen, above the shaken scene) on life loss.
+    if(state.flash > 0){
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalAlpha = Math.min(0.55, state.flash * 0.55);
+      ctx.fillStyle = '#ff2323';
+      ctx.fillRect(0, 0, W, H);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
 
   }
 
