@@ -83,11 +83,16 @@
   .hidden{display:none !important;}
 
   #game-wrap{
-    position:relative;width:100%;max-width:720px;aspect-ratio:4/3;border-radius:24px;
+    position:relative;width:min(100%, 960px);max-width:960px;aspect-ratio:4/3;border-radius:24px;
     overflow:hidden;box-shadow:0 14px 0 #2c6ea6, 0 22px 36px rgba(0,0,0,0.3);
     border:5px solid #fff;background:#000;
   }
   #game-canvas{width:100%;height:100%;display:block;transform:scaleX(-1);}
+  #game-wrap:fullscreen{
+    width:100vw;max-width:none;height:100vh;aspect-ratio:auto;border:0;border-radius:0;
+    box-shadow:none;
+  }
+  #game-wrap:fullscreen #game-canvas{object-fit:cover;}
   #hud{
     position:absolute;top:0;left:0;right:0;display:flex;justify-content:space-between;
     align-items:flex-start;padding:10px 12px;pointer-events:none;
@@ -99,6 +104,13 @@
     min-width:78px;text-align:center;
   }
   .chip small{display:block;font-size:0.55em;font-weight:700;opacity:0.85;letter-spacing:1px;}
+  #fullscreen-btn{
+    pointer-events:auto;width:44px;height:44px;border:0;border-radius:13px;cursor:pointer;
+    color:var(--cream);background:linear-gradient(180deg,var(--wood),var(--wood-dark));
+    box-shadow:0 4px 0 #3d220f;padding:10px;
+  }
+  #fullscreen-btn:active{transform:translateY(3px);box-shadow:0 1px 0 #3d220f;}
+  #fullscreen-btn svg{display:block;width:100%;height:100%;fill:currentColor;}
   #countdown-overlay{
     position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
     background:rgba(0,0,0,0.35);color:#fff;font-size:5em;font-weight:900;
@@ -108,6 +120,30 @@
     position:absolute;inset:0;display:flex;flex-direction:column;gap:10px;
     align-items:center;justify-content:center;background:rgba(0,0,0,0.55);color:#fff;
     font-size:1.1em;font-weight:800;text-align:center;padding:20px;
+  }
+  #distance-overlay{
+    position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;gap:12px;
+    align-items:center;justify-content:center;background:rgba(0,0,0,0.66);color:#fff;
+    text-align:center;padding:28px;font-weight:800;
+  }
+  #distance-overlay strong{font-size:1.35em;}
+  #distance-overlay p{max-width:470px;margin:0;line-height:1.45;}
+  #distance-overlay .distance-note{font-size:.82em;font-weight:600;opacity:.9;}
+  #distance-overlay .calibrate-btn{
+    background:var(--sun);color:#54310e;border:0;border-radius:14px;padding:12px 18px;
+    font:800 1em inherit;cursor:pointer;box-shadow:0 4px 0 #bc8e16;
+  }
+  #distance-overlay .calibrate-btn:disabled{opacity:.65;cursor:not-allowed;}
+  #distance-message{min-height:1.3em;color:#ffd93d;}
+  #distance-warning{
+    position:absolute;z-index:2;left:50%;bottom:16px;transform:translateX(-50%);max-width:90%;
+    color:#5a1f00;background:#fff2bc;border:3px solid #ffb703;border-radius:14px;padding:9px 14px;
+    text-align:center;font-weight:900;box-shadow:0 3px 0 rgba(0,0,0,.22);
+  }
+  @media (max-width:520px){
+    #app{padding:8px;}
+    #game-wrap{width:100%;border-radius:18px;}
+    .chip{min-width:62px;padding:7px 9px;font-size:.9em;}
   }
   #combo-pop{
     position:absolute;top:60px;left:50%;transform:translateX(-50%);color:#fff;font-weight:900;
@@ -137,7 +173,7 @@
     <h1>🍓 Tangkap Buah!</h1>
     <div class="subtitle">Hand Tracking — Tangan Terbuka Sahaja</div>
     <div class="rules">
-      <div>📷 <b>Berdiri</b> agak jauh supaya badan & tangan kelihatan penuh.</div>
+      <div>📷 <b>Berdiri sekurang-kurangnya 2 meter</b> supaya badan & tangan kelihatan penuh.</div>
       <div>✋ <b>Buka tangan</b> untuk tangkap buah — genggam tangan = tak tangkap.</div>
       <div>💣 <b>Elak bom</b> — genggam tangan bila lalu dekat bom supaya selamat!</div>
       <div>🏆 Markah tertinggi masuk <b>Papan Ranking</b> (peranti ini).</div>
@@ -160,6 +196,9 @@
       <div class="chip"><small>SKOR</small><span id="hud-score">0</span></div>
       <div class="chip"><small>MASA</small><span id="hud-time">45</span></div>
       <div class="chip"><small>KOMBO</small><span id="hud-combo">0</span></div>
+      <button id="fullscreen-btn" type="button" title="Skrin penuh landskap" aria-label="Skrin penuh landskap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5h4V3H4a2 2 0 0 0-2 2v4h2Zm12-6v2h4v4h2V5a2 2 0 0 0-2-2h-4ZM4 15H2v4a2 2 0 0 0 2 2h4v-2H4v-4Zm16 0v4h-4v2h4a2 2 0 0 0 2-2v-4h-2Z"/></svg>
+      </button>
     </div>
     <div id="combo-pop"></div>
     <div id="countdown-overlay" class="hidden">3</div>
@@ -167,6 +206,14 @@
       <div>⏳ Memuatkan model AI tangan...</div>
       <div style="font-size:0.7em;font-weight:600;opacity:0.85;">Sekali sahaja, perlukan internet (~10MB)</div>
     </div>
+    <div id="distance-overlay" class="hidden">
+      <strong>Semakan jarak kamera</strong>
+      <p>Letakkan murid di tanda <b>2 meter</b> dari kamera, kemudian angkat satu tapak tangan terbuka di paras dada.</p>
+      <div id="distance-message">Mencari tangan...</div>
+      <button id="btn-calibrate-distance" class="calibrate-btn" type="button" disabled>Sahkan jarak 2 meter</button>
+      <div class="distance-note">Semakan ini menggunakan saiz tapak tangan sebagai rujukan. Pastikan kamera tidak dialihkan selepas kalibrasi.</div>
+    </div>
+    <div id="distance-warning" class="hidden">Undur sedikit — kekalkan jarak sekurang-kurangnya 2 meter.</div>
   </div>
 
   <!-- GAME OVER SCREEN -->
@@ -229,7 +276,10 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     score:0, combo:0, maxCombo:0, timeLeft:45,
     fruits:[], effects:[], spawnTimer:0,
     running:false, shake:0, flash:0, stream:null,
-    hands:[], // {cx,cy,r,open}
+    hands:[], // {cx,cy,r,palmW,open}
+    nextFruitId:1,
+    calibrating:false, calibrationSamples:[], calibratedPalmWidth:0,
+    tooClose:false, closeFrames:0, clearFrames:0,
   };
 
   // ---------- dom ----------
@@ -245,6 +295,11 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   const comboPop = $('combo-pop');
   const countdownOverlay = $('countdown-overlay');
   const loadingOverlay = $('loading-overlay');
+  const distanceOverlay = $('distance-overlay');
+  const distanceMessage = $('distance-message');
+  const calibrateDistanceBtn = $('btn-calibrate-distance');
+  const distanceWarning = $('distance-warning');
+  const fullscreenBtn = $('fullscreen-btn');
   const camError = $('cam-error');
 
   // ---------- audio ----------
@@ -306,6 +361,10 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   $('btn-play-again').addEventListener('click', resetToStart);
   $('btn-skip-save').addEventListener('click', resetToStart);
   $('btn-save').addEventListener('click', saveScoreAndShowRank);
+  calibrateDistanceBtn.addEventListener('click', confirmDistanceCalibration);
+  fullscreenBtn.addEventListener('click', toggleFullscreen);
+  document.addEventListener('fullscreenchange', syncFullscreenButton);
+  document.addEventListener('webkitfullscreenchange', syncFullscreenButton);
 
   async function startFlow(){
     camError.classList.add('hidden');
@@ -337,13 +396,101 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
         }
         loadingOverlay.classList.add('hidden');
       }
-      runCountdown();
+      startDistanceCalibration();
     }catch(err){
       camError.textContent = '⚠️ Tidak dapat akses kamera. Sila benarkan kebenaran kamera pada pelayar, kemudian cuba lagi.';
       camError.classList.remove('hidden');
     }finally{
       $('btn-start').disabled = false;
       $('btn-start').textContent = '🎮 Mula Main';
+    }
+  }
+
+  // A webcam has no reliable absolute-distance sensor.  We therefore use a
+  // palm-width reference recorded while the child is standing at a measured
+  // 2 m mark.  The same camera position must be kept for the whole round.
+  function startDistanceCalibration(){
+    state.calibrating = true;
+    state.calibrationSamples = [];
+    state.calibratedPalmWidth = 0;
+    state.tooClose = false;
+    state.closeFrames = 0;
+    state.clearFrames = 0;
+    distanceMessage.textContent = 'Mencari tangan...';
+    calibrateDistanceBtn.disabled = true;
+    distanceOverlay.classList.remove('hidden');
+    distanceWarning.classList.add('hidden');
+
+    function calibrationLoop(ts){
+      if(!state.calibrating) return;
+      detectHands(ts);
+      const widestPalm = state.hands
+        .filter(hand=> hand.open)
+        .reduce((widest, hand)=> Math.max(widest, hand.palmW), 0);
+      if(widestPalm > 0){
+        state.calibrationSamples.push(widestPalm);
+        if(state.calibrationSamples.length > 18) state.calibrationSamples.shift();
+      }
+      const ready = state.calibrationSamples.length >= 5;
+      calibrateDistanceBtn.disabled = !ready;
+      distanceMessage.textContent = ready
+        ? 'Tangan dikesan. Sahkan apabila murid berada pada tanda 2 meter.'
+        : 'Mencari tangan terbuka...';
+      render();
+      requestAnimationFrame(calibrationLoop);
+    }
+    requestAnimationFrame(calibrationLoop);
+  }
+
+  function confirmDistanceCalibration(){
+    const samples = state.calibrationSamples.slice(-12).sort((a,b)=> a-b);
+    if(samples.length < 5){
+      distanceMessage.textContent = 'Tangan belum dikesan dengan stabil. Cuba angkat tapak tangan.';
+      return;
+    }
+    state.calibratedPalmWidth = samples[Math.floor(samples.length / 2)];
+    state.calibrating = false;
+    distanceOverlay.classList.add('hidden');
+    runCountdown();
+  }
+
+  async function toggleFullscreen(){
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    try{
+      if(fullscreenElement){
+        const exit = document.exitFullscreen || document.webkitExitFullscreen;
+        if(exit) await exit.call(document);
+      } else {
+        const request = gameWrap.requestFullscreen || gameWrap.webkitRequestFullscreen;
+        if(request) await request.call(gameWrap);
+        if(screen.orientation && screen.orientation.lock){
+          try{ await screen.orientation.lock('landscape'); }catch(e){}
+        }
+      }
+    }catch(e){
+      // Some mobile browsers do not allow fullscreen/orientation locking.
+      // The game remains usable in its responsive landscape layout.
+      console.warn('Fullscreen unavailable', e);
+    }
+    syncFullscreenButton();
+  }
+
+  function syncFullscreenButton(){
+    const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    fullscreenBtn.title = isFullscreen ? 'Keluar skrin penuh' : 'Skrin penuh landskap';
+    fullscreenBtn.setAttribute('aria-label', fullscreenBtn.title);
+    if(!isFullscreen && screen.orientation && screen.orientation.unlock){
+      try{ screen.orientation.unlock(); }catch(e){}
+    }
+  }
+
+  function leaveFullscreen(){
+    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+    if(!fullscreenElement) return;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if(exit){
+      const result = exit.call(document);
+      if(result && result.catch) result.catch(()=>{});
     }
   }
 
@@ -370,6 +517,8 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     state.fruits = []; state.effects = [];
     state.spawnTimer = 300; state.shake = 0; state.flash = 0;
     state.hands = [];
+    state.tooClose = false; state.closeFrames = 0; state.clearFrames = 0;
+    distanceWarning.classList.add('hidden');
     state.running = true;
     let lastTs = performance.now();
 
@@ -419,11 +568,17 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
       }
       const open = extended >= 3;
 
-      state.hands.push({cx, cy, r: radius, open, landmarks: lm});
+      state.hands.push({cx, cy, r: radius, palmW, open, landmarks: lm});
     }
   }
 
   function update(dt){
+    if(updateDistanceGuard()){
+      hudScore.textContent = state.score;
+      hudTime.textContent = Math.ceil(state.timeLeft);
+      hudCombo.textContent = state.combo;
+      return;
+    }
     state.timeLeft -= dt;
     if(state.timeLeft <= 0){
       state.timeLeft = 0;
@@ -448,25 +603,26 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
     // catch check: each OPEN hand can catch its single closest overlapping fruit
     const openHands = state.hands.filter(h=>h.open);
-    const caughtThisFrame = new Set();
+    const caughtIds = new Set();
     for(const hand of openHands){
       let best = null, bestDist = Infinity;
       for(const f of state.fruits){
-        if(caughtThisFrame.has(f)) continue;
+        if(caughtIds.has(f.id)) continue;
         const d = Math.hypot(f.x - hand.cx, f.y - hand.cy);
         if(d < (f.r + hand.r * 0.65) && d < bestDist){
           best = f; bestDist = d;
         }
       }
       if(best){
-        caughtThisFrame.add(best);
+        caughtIds.add(best.id);
         handleCatch(best);
-        best.caught = true;
       }
     }
 
     state.fruits = state.fruits.filter(f=>{
-      if(f.caught) return false;
+      // Remove only the exact fruit that was caught.  A bomb must never
+      // reset or remove the other fruit sprites already on screen.
+      if(caughtIds.has(f.id)) return false;
       if(f.y - f.r > H){
         if(!f.bomb) state.combo = 0;
         return false;
@@ -485,6 +641,25 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     hudCombo.textContent = state.combo;
   }
 
+  function updateDistanceGuard(){
+    if(!state.calibratedPalmWidth) return false;
+    const widestPalm = state.hands.reduce((widest, hand)=> Math.max(widest, hand.palmW), 0);
+    // A generous margin avoids a warning when a child reaches forward a bit,
+    // while still catching a clear move closer to the camera.
+    const appearsTooClose = widestPalm > state.calibratedPalmWidth * 1.35;
+    if(appearsTooClose){
+      state.closeFrames++;
+      state.clearFrames = 0;
+    } else {
+      state.clearFrames++;
+      state.closeFrames = 0;
+    }
+    if(state.closeFrames >= 4) state.tooClose = true;
+    if(state.tooClose && state.clearFrames >= 8) state.tooClose = false;
+    distanceWarning.classList.toggle('hidden', !state.tooClose);
+    return state.tooClose;
+  }
+
   function spawnFruit(elapsed){
     let type;
     const bombChance = Math.min(0.28, 0.08 + elapsed * 0.004);
@@ -495,8 +670,9 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     }
     const r = type.r;
     state.fruits.push({
+      id: state.nextFruitId++,
       x: r + Math.random() * (W - r * 2), y: -r, r: r,
-      emoji: type.emoji, pts: type.pts, spd: type.spd, bomb: !!type.bomb, caught: false,
+      emoji: type.emoji, pts: type.pts, spd: type.spd, bomb: !!type.bomb,
     });
   }
 
@@ -545,6 +721,7 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
     }
 
     // fruits
+    ctx.globalAlpha = 1;
     for(const f of state.fruits){
       ctx.font = (f.r * 1.7) + 'px serif';
       ctx.textAlign = 'center';
@@ -594,6 +771,8 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
   function endGame(){
     state.running = false;
+    distanceWarning.classList.add('hidden');
+    leaveFullscreen();
     $('final-score').textContent = state.score;
     $('final-combo').textContent = 'Kombo terbaik: ' + state.maxCombo;
     gameWrap.classList.add('hidden');
@@ -662,6 +841,11 @@ import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
   }
 
   function resetToStart(){
+    state.running = false;
+    state.calibrating = false;
+    distanceOverlay.classList.add('hidden');
+    distanceWarning.classList.add('hidden');
+    leaveFullscreen();
     if(state.stream){
       state.stream.getTracks().forEach(t=> t.stop());
       state.stream = null;
