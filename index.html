@@ -278,7 +278,7 @@
 </div>
 
 <script type="module">
-import { HandLandmarker, FaceDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 
   // ---------- constants ----------
   const W = 640, H = 480;
@@ -429,26 +429,27 @@ import { HandLandmarker, FaceDetector, FilesetResolver } from "https://cdn.jsdel
     return Promise.reject(err);
   });
 
-  // Face detection (cosmetic: places the avatar over the player's head).
+  // Face landmarks (cosmetic: places the avatar over the player's head).
   // Purely optional - if it fails to load the game still works, just without
-  // the avatar, so this never blocks the "Mula Main" flow.
-  let faceDetector = null;
-  async function initFaceDetector(){
+  // the avatar, so this never blocks the "Mula Main" flow. FaceLandmarker
+  // gives 468 points, so head position/size/tilt are far more stable than a
+  // bounding box.
+  let faceLandmarker = null;
+  async function initFaceLandmarker(){
     const vision = await getVision();
-    const modelUrl = "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.task";
+    const modelUrl = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+    const opts = (delegate)=>({
+      baseOptions: { modelAssetPath: modelUrl, delegate },
+      runningMode: "VIDEO",
+      numFaces: 1,
+    });
     try{
-      faceDetector = await FaceDetector.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: modelUrl, delegate: "GPU" },
-        runningMode: "VIDEO",
-      });
+      faceLandmarker = await FaceLandmarker.createFromOptions(vision, opts("GPU"));
     }catch(e){
-      faceDetector = await FaceDetector.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: modelUrl, delegate: "CPU" },
-        runningMode: "VIDEO",
-      });
+      faceLandmarker = await FaceLandmarker.createFromOptions(vision, opts("CPU"));
     }
   }
-  initFaceDetector().catch(err=> console.warn('FaceDetector load failed (avatar disabled)', err));
+  initFaceLandmarker().catch(err=> console.warn('FaceLandmarker load failed (avatar disabled)', err));
 
   // ---------- flow ----------
   $('btn-start').addEventListener('click', startFlow);
@@ -700,35 +701,36 @@ import { HandLandmarker, FaceDetector, FilesetResolver } from "https://cdn.jsdel
   }
 
   // ---------- head detection (for the avatar overlay) ----------
-  // BlazeFace keypoints: [0]=right eye, [1]=left eye, [2]=nose, [3]=mouth,
-  // [4]=right ear, [5]=left ear. We take the largest (nearest) face.
+  // FaceLandmarker returns 468 normalised (0-1) points. Face-mesh indices:
+  // 33 = right-eye outer corner, 263 = left-eye outer corner (used for tilt).
   function detectFace(ts){
-    if(!faceDetector || video.readyState < 2){ state.face = null; return; }
+    if(!faceLandmarker || video.readyState < 2){ state.face = null; return; }
     let result;
     try{
-      result = faceDetector.detectForVideo(video, ts);
+      result = faceLandmarker.detectForVideo(video, ts);
     }catch(e){
       return; // keep last face on a transient error to avoid flicker
     }
-    const dets = result && result.detections;
-    if(!dets || dets.length === 0){ state.face = null; return; }
-    // pick the biggest bounding box = closest head
-    let best = dets[0];
-    for(const d of dets){
-      if(d.boundingBox.width > best.boundingBox.width) best = d;
+    const faces = result && result.faceLandmarks;
+    if(!faces || faces.length === 0){ state.face = null; return; }
+    const lms = faces[0];
+    // bounding box over every landmark -> stable head centre & size
+    let minX = 1, minY = 1, maxX = 0, maxY = 0;
+    for(const p of lms){
+      if(p.x < minX) minX = p.x;
+      if(p.x > maxX) maxX = p.x;
+      if(p.y < minY) minY = p.y;
+      if(p.y > maxY) maxY = p.y;
     }
-    const box = best.boundingBox;
-    const cx = (box.originX + box.width / 2) * (W / video.videoWidth);
-    const cy = (box.originY + box.height / 2) * (H / video.videoHeight);
-    // avatar size a bit bigger than the face box to cover forehead + ears
-    const size = Math.max(box.width, box.height) * (W / video.videoWidth) * 1.7;
-    // roll angle from the two eye keypoints (normalised 0-1, scale to canvas px)
-    let angle = 0;
-    const kp = best.keypoints;
-    if(kp && kp.length >= 2){
-      const rEye = kp[0], lEye = kp[1];
-      angle = Math.atan2((lEye.y - rEye.y) * H, (lEye.x - rEye.x) * W);
-    }
+    const fw = (maxX - minX) * W, fh = (maxY - minY) * H;
+    const cx = ((minX + maxX) / 2) * W;
+    // landmarks stop at the forehead; nudge up so the avatar covers the whole
+    // head, and size up to include hair/ears.
+    const cy = ((minY + maxY) / 2) * H - fh * 0.12;
+    const size = Math.max(fw, fh) * 1.9;
+    // roll angle from the two outer eye corners
+    const a = lms[33], b = lms[263];
+    const angle = (a && b) ? Math.atan2((b.y - a.y) * H, (b.x - a.x) * W) : 0;
     state.face = { cx, cy, size, angle };
   }
 
