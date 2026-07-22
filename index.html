@@ -272,6 +272,23 @@
     <div><button class="ghost-btn" id="btn-skip-save">Main Semula Tanpa Simpan</button></div>
   </div>
 
+  <!-- 2-PLAYER RESULT SCREEN -->
+  <div id="screen-result-2p" class="card hidden">
+    <h1 id="result2p-title">🏆 Player 1 Menang!</h1>
+    <div class="subtitle">Keputusan perlawanan</div>
+    <div style="display:flex;gap:14px;justify-content:center;margin:18px 0;flex-wrap:wrap;">
+      <div style="flex:1;min-width:120px;">
+        <div style="font-weight:900;color:#3a9c4d;">P1 ✋</div>
+        <div class="score-final" id="result2p-p1" style="color:#3a9c4d;">0</div>
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <div style="font-weight:900;color:#e07a1f;">P2 ✊</div>
+        <div class="score-final" id="result2p-p2" style="color:#e07a1f;">0</div>
+      </div>
+    </div>
+    <button class="big-btn" id="btn-result-again">🔁 Main Lagi</button>
+  </div>
+
   <!-- LEADERBOARD SCREEN -->
   <div id="screen-leaderboard" class="card hidden">
     <h1>🏆 Papan Ranking</h1>
@@ -341,6 +358,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
   const gameWrap = $('game-wrap');
   const screenOver = $('screen-gameover');
   const screenRank = $('screen-leaderboard');
+  const screenResult2P = $('screen-result-2p');
   const video = $('video');
   const canvas = $('game-canvas');
   const ctx = canvas.getContext('2d');
@@ -477,6 +495,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     btn.addEventListener('click', ()=> showLeaderboard(btn.dataset.mode));
   });
   $('btn-play-again').addEventListener('click', resetToStart);
+  $('btn-result-again').addEventListener('click', resetToStart);
   $('btn-skip-save').addEventListener('click', resetToStart);
   $('btn-save').addEventListener('click', saveScoreAndShowRank);
   fullscreenBtn.addEventListener('click', toggleFullscreen);
@@ -1353,6 +1372,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     state.running = false;
     distanceWarning.classList.add('hidden');
     leaveFullscreen();
+    if(state.mode === '2player'){ showResult2P(); return; }
     const survival = state.mode === 'survival';
     $('final-score').textContent = state.score;
     $('final-combo').textContent = 'Kombo terbaik: ' + state.maxCombo;
@@ -1366,6 +1386,18 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     gameWrap.classList.add('hidden');
     screenOver.classList.remove('hidden');
     prefillName();
+  }
+
+  function showResult2P(){
+    const p1 = state.p1Score, p2 = state.p2Score;
+    const title = p1 > p2 ? '🏆 Player 1 Menang!'
+                : p2 > p1 ? '🏆 Player 2 Menang!'
+                : '🤝 Seri!';
+    $('result2p-title').textContent = title;
+    $('result2p-p1').textContent = p1;
+    $('result2p-p2').textContent = p2;
+    gameWrap.classList.add('hidden');
+    screenResult2P.classList.remove('hidden');
   }
 
   function prefillName(){
@@ -1454,6 +1486,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     }
     screenRank.classList.add('hidden');
     screenOver.classList.add('hidden');
+    screenResult2P.classList.add('hidden');
     gameWrap.classList.add('hidden');
     screenStart.classList.remove('hidden');
   }
