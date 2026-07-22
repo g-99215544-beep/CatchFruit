@@ -232,6 +232,8 @@
       <div class="chip" id="hud-time-chip"><small>MASA</small><span id="hud-time">45</span></div>
       <div class="chip hidden" id="hud-lives-chip"><small>NYAWA</small><span id="hud-lives">❤️❤️❤️</span></div>
       <div class="chip"><small>KOMBO</small><span id="hud-combo">0</span></div>
+      <div class="chip hidden" id="hud-p1-chip"><small style="color:#5ae678;">P1 ✋</small><span id="hud-p1">0</span><small id="hud-p1combo" style="opacity:.75;">kombo 0</small></div>
+      <div class="chip hidden" id="hud-p2-chip"><small style="color:#ff9a3c;">P2 ✊</small><span id="hud-p2">0</span><small id="hud-p2combo" style="opacity:.75;">kombo 0</small></div>
       <button id="fullscreen-btn" type="button" title="Skrin penuh landskap" aria-label="Skrin penuh landskap">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5h4V3H4a2 2 0 0 0-2 2v4h2Zm12-6v2h4v4h2V5a2 2 0 0 0-2-2h-4ZM4 15H2v4a2 2 0 0 0 2 2h4v-2H4v-4Zm16 0v4h-4v2h4a2 2 0 0 0 2-2v-4h-2Z"/></svg>
       </button>
@@ -344,6 +346,9 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
   const ctx = canvas.getContext('2d');
   const hudScore = $('hud-score'), hudTime = $('hud-time'), hudCombo = $('hud-combo');
   const hudTimeChip = $('hud-time-chip'), hudLivesChip = $('hud-lives-chip'), hudLives = $('hud-lives');
+  const hudP1Chip = $('hud-p1-chip'), hudP2Chip = $('hud-p2-chip');
+  const hudP1 = $('hud-p1'), hudP2 = $('hud-p2');
+  const hudP1Combo = $('hud-p1combo'), hudP2Combo = $('hud-p2combo');
   const modeRow = $('mode-row');
   const normalOptions = $('normal-options');
   const survivalOptions = $('survival-options');
@@ -649,6 +654,9 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
 
   function beginGame(){
     state.score = 0; state.combo = 0; state.maxCombo = 0;
+    state.p1Score = 0; state.p2Score = 0;
+    state.p1Combo = 0; state.p2Combo = 0;
+    state.p1MaxCombo = 0; state.p2MaxCombo = 0;
     state.timeLeft = state.roundDuration;
     state.lives = 3; state.elapsed = 0;
     state.flash = 0; state.shake = 0;
@@ -658,8 +666,15 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     state.tooClose = false; state.closeFrames = 0; state.clearFrames = 0;
     distanceWarning.classList.add('hidden');
     const survival = state.mode === 'survival';
+    const twoP = state.mode === '2player';
+    // Time chip tunjuk untuk Normal & 2P (kedua-dua ada had masa).
     hudTimeChip.classList.toggle('hidden', survival);
     hudLivesChip.classList.toggle('hidden', !survival);
+    // Skor & kombo tunggal (chip pertama & KOMBO) disembunyikan dalam 2P.
+    hudScore.parentElement.classList.toggle('hidden', twoP);
+    hudCombo.parentElement.classList.toggle('hidden', twoP);
+    hudP1Chip.classList.toggle('hidden', !twoP);
+    hudP2Chip.classList.toggle('hidden', !twoP);
     if(survival) hudLives.textContent = '❤️'.repeat(state.lives);
     state.running = true;
     let lastTs = performance.now();
