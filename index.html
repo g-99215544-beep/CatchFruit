@@ -798,12 +798,15 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
       f.y += fallSpeed * f.spd * dt;
     }
 
-    // catch check: each OPEN hand can catch its single closest overlapping fruit
-    const openHands = state.hands.filter(h=>h.open);
+    // catch check
+    const twoP = state.mode === '2player';
+    // Mode single: hanya tangan terbuka menangkap. Mode 2P: SEMUA tangan menangkap
+    // (terbuka = P1, genggam = P2).
+    const catchingHands = twoP ? state.hands : state.hands.filter(h=>h.open);
     // Keep object references instead of numeric IDs. This guarantees that
     // only the exact fruit touched by a hand is removed from this frame.
     const caughtFruits = new Set();
-    for(const hand of openHands){
+    for(const hand of catchingHands){
       let best = null, bestDist = Infinity;
       for(const f of state.fruits){
         if(caughtFruits.has(f)) continue;
@@ -814,8 +817,14 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
       }
       if(best){
         caughtFruits.add(best);
-        if(best.isBomb) handleBomb(best);
-        else handleCatch(best);
+        if(twoP){
+          const player = hand.open ? 'p1' : 'p2';
+          if(best.isBomb) handleBomb2P(player, best);
+          else handleCatch2P(player, best);
+        } else {
+          if(best.isBomb) handleBomb(best);
+          else handleCatch(best);
+        }
       }
     }
 
@@ -844,12 +853,20 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     if(state.flash > 0) state.flash = Math.max(0, state.flash - dt * 2.2);
     if(state.shake > 0) state.shake = Math.max(0, state.shake - dt * 3.5);
 
-    hudScore.textContent = state.score;
-    hudCombo.textContent = state.combo;
-    if(survival){
-      hudLives.textContent = '❤️'.repeat(Math.max(0, state.lives));
-    } else {
+    if(state.mode === '2player'){
+      hudP1.textContent = state.p1Score;
+      hudP2.textContent = state.p2Score;
+      hudP1Combo.textContent = 'kombo ' + state.p1Combo;
+      hudP2Combo.textContent = 'kombo ' + state.p2Combo;
       hudTime.textContent = Math.ceil(state.timeLeft);
+    } else {
+      hudScore.textContent = state.score;
+      hudCombo.textContent = state.combo;
+      if(survival){
+        hudLives.textContent = '❤️'.repeat(Math.max(0, state.lives));
+      } else {
+        hudTime.textContent = Math.ceil(state.timeLeft);
+      }
     }
     if(state.running && survival && state.lives <= 0) endGame();
   }
@@ -927,6 +944,25 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     comboPop.style.opacity = '1';
     clearTimeout(popCombo._t);
     popCombo._t = setTimeout(()=>{ comboPop.style.opacity = '0'; }, 700);
+  }
+
+  // 2-player: catch/bomb per pemain ('p1' = tangan terbuka, 'p2' = genggam).
+  function handleCatch2P(player, f){
+    const combo = state[player + 'Combo'];
+    const mult = 1 + Math.floor(combo / 5) * 0.5;
+    const gained = Math.round(f.pts * mult);
+    state[player + 'Score'] += gained;
+    state[player + 'Combo'] = combo + 1;
+    if(state[player + 'Combo'] > state[player + 'MaxCombo']) state[player + 'MaxCombo'] = state[player + 'Combo'];
+    addEffect(f.x, f.y, '+' + gained, player === 'p1' ? '#5ae678' : '#ff9a3c');
+    beep(500 + Math.min(state[player + 'Combo'], 20) * 20, 0.12, 'triangle');
+  }
+  function handleBomb2P(player, f){
+    state[player + 'Score'] = Math.max(0, state[player + 'Score'] - 30);
+    state[player + 'Combo'] = 0;
+    addEffect(f.x, f.y, '-30', '#ff5a3c');
+    state.effects.push({x: f.x, y: f.y, boom: true, life: 0.5, startLife: 0.5});
+    beep(90, 0.35, 'sawtooth');
   }
 
   function addEffect(x, y, text, color){
