@@ -308,10 +308,12 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
 
   // ---------- state ----------
   const state = {
-    mode:'normal', // 'normal' | 'survival'
+    mode:'normal', // 'normal' | 'survival' | '2player'
     speedMult:1,   // fixed multiplier chosen for Normal mode
     roundDuration:45,
     score:0, combo:0, maxCombo:0, timeLeft:45,
+    // 2-player mode: markah & kombo berasingan (P1 = tangan terbuka, P2 = genggam)
+    p1Score:0, p2Score:0, p1Combo:0, p2Combo:0, p1MaxCombo:0, p2MaxCombo:0,
     lives:3, elapsed:0,
     flash:0, shake:0, // red flash + screen-shake feedback when a life is lost
     fruits:[], effects:[], spawnTimer:0,
