@@ -188,6 +188,7 @@
     <div class="duration-row" id="mode-row">
       <button class="dur-btn active" data-mode="normal">🍎 Normal</button>
       <button class="dur-btn" data-mode="survival">💀 Survival</button>
+      <button class="dur-btn" data-mode="2player">👥 2 Pemain</button>
     </div>
     <div id="normal-options">
       <div class="duration-row" id="duration-row">
@@ -210,6 +211,12 @@
       <div>❤️❤️❤️ <b>3 nyawa</b> — buah jatuh ke bawah atau kena bom = tolak 1 nyawa.</div>
       <div>⏱️ <b>Tiada had masa</b> — bertahan selama mungkin.</div>
       <div>⚡ Kelajuan naik <b>20%</b> setiap 10 saat.</div>
+    </div>
+    <div id="twoplayer-options" class="rules hidden">
+      <div>✋ <b>Player 1</b> tangkap buah dengan <b>tangan terbuka</b> (cincin hijau).</div>
+      <div>✊ <b>Player 2</b> tangkap buah dengan <b>tangan genggam</b> (cincin oren).</div>
+      <div>💣 Kena bom = tolak markah pemain berkenaan. ⏱️ Markah tertinggi menang.</div>
+      <div class="distance-note" style="margin-top:6px;">Tempoh & kelajuan di atas digunakan untuk kedua-dua pemain.</div>
     </div>
     <button class="big-btn" id="btn-start">🎮 Mula Main</button>
     <div><button class="ghost-btn" id="btn-view-rank">🏆 Lihat Ranking</button></div>
@@ -367,13 +374,17 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
   }
 
   // ---------- mode buttons ----------
+  const twoplayerOptions = $('twoplayer-options');
   modeRow.querySelectorAll('.dur-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       modeRow.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       state.mode = btn.dataset.mode;
-      normalOptions.classList.toggle('hidden', state.mode !== 'normal');
+      // Normal & 2-player kongsi kawalan tempoh + kelajuan.
+      const showNormalControls = state.mode === 'normal' || state.mode === '2player';
+      normalOptions.classList.toggle('hidden', !showNormalControls);
       survivalOptions.classList.toggle('hidden', state.mode !== 'survival');
+      twoplayerOptions.classList.toggle('hidden', state.mode !== '2player');
     });
   });
 
