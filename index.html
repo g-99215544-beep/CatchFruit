@@ -1020,14 +1020,21 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     }
 
     // hand indicators - green ring = open/catch-ready, gray dashed = closed/safe
+    const twoPRender = state.mode === '2player';
     for(const hand of state.hands){
       ctx.save();
       ctx.beginPath();
       ctx.arc(hand.cx, hand.cy, hand.r * 0.65, 0, Math.PI * 2);
       if(hand.open){
+        // Terbuka = P1 (hijau), aktif dalam semua mode.
         ctx.strokeStyle = 'rgba(90, 230, 120, 0.9)';
         ctx.lineWidth = 4;
+      } else if(twoPRender){
+        // 2P: genggam = P2 (oren), aktif.
+        ctx.strokeStyle = 'rgba(255, 154, 60, 0.95)';
+        ctx.lineWidth = 4;
       } else {
+        // Mode single: genggam = selamat/tak aktif (kelabu putus-putus).
         ctx.strokeStyle = 'rgba(200, 200, 200, 0.7)';
         ctx.lineWidth = 3;
         ctx.setLineDash([6,6]);
