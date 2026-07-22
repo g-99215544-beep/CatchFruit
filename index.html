@@ -188,6 +188,7 @@
     <div class="duration-row" id="mode-row">
       <button class="dur-btn active" data-mode="normal">🍎 Normal</button>
       <button class="dur-btn" data-mode="survival">💀 Survival</button>
+      <button class="dur-btn" data-mode="2player">👥 2 Pemain</button>
     </div>
     <div id="normal-options">
       <div class="duration-row" id="duration-row">
@@ -211,6 +212,12 @@
       <div>⏱️ <b>Tiada had masa</b> — bertahan selama mungkin.</div>
       <div>⚡ Kelajuan naik <b>20%</b> setiap 10 saat.</div>
     </div>
+    <div id="twoplayer-options" class="rules hidden">
+      <div>✋ <b>Player 1</b> tangkap buah dengan <b>tangan terbuka</b> (cincin hijau).</div>
+      <div>✊ <b>Player 2</b> tangkap buah dengan <b>tangan genggam</b> (cincin oren).</div>
+      <div>💣 Kena bom = tolak markah pemain berkenaan. ⏱️ Markah tertinggi menang.</div>
+      <div class="distance-note" style="margin-top:6px;">Tempoh & kelajuan di atas digunakan untuk kedua-dua pemain.</div>
+    </div>
     <button class="big-btn" id="btn-start">🎮 Mula Main</button>
     <div><button class="ghost-btn" id="btn-view-rank">🏆 Lihat Ranking</button></div>
     <div id="cam-error" class="error-box hidden"></div>
@@ -225,6 +232,8 @@
       <div class="chip" id="hud-time-chip"><small>MASA</small><span id="hud-time">45</span></div>
       <div class="chip hidden" id="hud-lives-chip"><small>NYAWA</small><span id="hud-lives">❤️❤️❤️</span></div>
       <div class="chip"><small>KOMBO</small><span id="hud-combo">0</span></div>
+      <div class="chip hidden" id="hud-p1-chip"><small style="color:#5ae678;">P1 ✋</small><span id="hud-p1">0</span><small id="hud-p1combo" style="opacity:.75;">kombo 0</small></div>
+      <div class="chip hidden" id="hud-p2-chip"><small style="color:#ff9a3c;">P2 ✊</small><span id="hud-p2">0</span><small id="hud-p2combo" style="opacity:.75;">kombo 0</small></div>
       <button id="fullscreen-btn" type="button" title="Skrin penuh landskap" aria-label="Skrin penuh landskap">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V5h4V3H4a2 2 0 0 0-2 2v4h2Zm12-6v2h4v4h2V5a2 2 0 0 0-2-2h-4ZM4 15H2v4a2 2 0 0 0 2 2h4v-2H4v-4Zm16 0v4h-4v2h4a2 2 0 0 0 2-2v-4h-2Z"/></svg>
       </button>
@@ -261,6 +270,23 @@
     </div>
     <button class="big-btn" id="btn-save">💾 Simpan & Lihat Ranking</button>
     <div><button class="ghost-btn" id="btn-skip-save">Main Semula Tanpa Simpan</button></div>
+  </div>
+
+  <!-- 2-PLAYER RESULT SCREEN -->
+  <div id="screen-result-2p" class="card hidden">
+    <h1 id="result2p-title">🏆 Player 1 Menang!</h1>
+    <div class="subtitle">Keputusan perlawanan</div>
+    <div style="display:flex;gap:14px;justify-content:center;margin:18px 0;flex-wrap:wrap;">
+      <div style="flex:1;min-width:120px;">
+        <div style="font-weight:900;color:#3a9c4d;">P1 ✋</div>
+        <div class="score-final" id="result2p-p1" style="color:#3a9c4d;">0</div>
+      </div>
+      <div style="flex:1;min-width:120px;">
+        <div style="font-weight:900;color:#e07a1f;">P2 ✊</div>
+        <div class="score-final" id="result2p-p2" style="color:#e07a1f;">0</div>
+      </div>
+    </div>
+    <button class="big-btn" id="btn-result-again">🔁 Main Lagi</button>
   </div>
 
   <!-- LEADERBOARD SCREEN -->
@@ -308,10 +334,12 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
 
   // ---------- state ----------
   const state = {
-    mode:'normal', // 'normal' | 'survival'
+    mode:'normal', // 'normal' | 'survival' | '2player'
     speedMult:1,   // fixed multiplier chosen for Normal mode
     roundDuration:45,
     score:0, combo:0, maxCombo:0, timeLeft:45,
+    // 2-player mode: markah & kombo berasingan (P1 = tangan terbuka, P2 = genggam)
+    p1Score:0, p2Score:0, p1Combo:0, p2Combo:0, p1MaxCombo:0, p2MaxCombo:0,
     lives:3, elapsed:0,
     flash:0, shake:0, // red flash + screen-shake feedback when a life is lost
     fruits:[], effects:[], spawnTimer:0,
@@ -330,11 +358,15 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
   const gameWrap = $('game-wrap');
   const screenOver = $('screen-gameover');
   const screenRank = $('screen-leaderboard');
+  const screenResult2P = $('screen-result-2p');
   const video = $('video');
   const canvas = $('game-canvas');
   const ctx = canvas.getContext('2d');
   const hudScore = $('hud-score'), hudTime = $('hud-time'), hudCombo = $('hud-combo');
   const hudTimeChip = $('hud-time-chip'), hudLivesChip = $('hud-lives-chip'), hudLives = $('hud-lives');
+  const hudP1Chip = $('hud-p1-chip'), hudP2Chip = $('hud-p2-chip');
+  const hudP1 = $('hud-p1'), hudP2 = $('hud-p2');
+  const hudP1Combo = $('hud-p1combo'), hudP2Combo = $('hud-p2combo');
   const modeRow = $('mode-row');
   const normalOptions = $('normal-options');
   const survivalOptions = $('survival-options');
@@ -365,13 +397,17 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
   }
 
   // ---------- mode buttons ----------
+  const twoplayerOptions = $('twoplayer-options');
   modeRow.querySelectorAll('.dur-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       modeRow.querySelectorAll('.dur-btn').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       state.mode = btn.dataset.mode;
-      normalOptions.classList.toggle('hidden', state.mode !== 'normal');
+      // Normal & 2-player kongsi kawalan tempoh + kelajuan.
+      const showNormalControls = state.mode === 'normal' || state.mode === '2player';
+      normalOptions.classList.toggle('hidden', !showNormalControls);
       survivalOptions.classList.toggle('hidden', state.mode !== 'survival');
+      twoplayerOptions.classList.toggle('hidden', state.mode !== '2player');
     });
   });
 
@@ -459,6 +495,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     btn.addEventListener('click', ()=> showLeaderboard(btn.dataset.mode));
   });
   $('btn-play-again').addEventListener('click', resetToStart);
+  $('btn-result-again').addEventListener('click', resetToStart);
   $('btn-skip-save').addEventListener('click', resetToStart);
   $('btn-save').addEventListener('click', saveScoreAndShowRank);
   fullscreenBtn.addEventListener('click', toggleFullscreen);
@@ -636,6 +673,9 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
 
   function beginGame(){
     state.score = 0; state.combo = 0; state.maxCombo = 0;
+    state.p1Score = 0; state.p2Score = 0;
+    state.p1Combo = 0; state.p2Combo = 0;
+    state.p1MaxCombo = 0; state.p2MaxCombo = 0;
     state.timeLeft = state.roundDuration;
     state.lives = 3; state.elapsed = 0;
     state.flash = 0; state.shake = 0;
@@ -645,8 +685,15 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     state.tooClose = false; state.closeFrames = 0; state.clearFrames = 0;
     distanceWarning.classList.add('hidden');
     const survival = state.mode === 'survival';
+    const twoP = state.mode === '2player';
+    // Time chip tunjuk untuk Normal & 2P (kedua-dua ada had masa).
     hudTimeChip.classList.toggle('hidden', survival);
     hudLivesChip.classList.toggle('hidden', !survival);
+    // Skor & kombo tunggal (chip pertama & KOMBO) disembunyikan dalam 2P.
+    hudScore.parentElement.classList.toggle('hidden', twoP);
+    hudCombo.parentElement.classList.toggle('hidden', twoP);
+    hudP1Chip.classList.toggle('hidden', !twoP);
+    hudP2Chip.classList.toggle('hidden', !twoP);
     if(survival) hudLives.textContent = '❤️'.repeat(state.lives);
     state.running = true;
     let lastTs = performance.now();
@@ -770,12 +817,15 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
       f.y += fallSpeed * f.spd * dt;
     }
 
-    // catch check: each OPEN hand can catch its single closest overlapping fruit
-    const openHands = state.hands.filter(h=>h.open);
+    // catch check
+    const twoP = state.mode === '2player';
+    // Mode single: hanya tangan terbuka menangkap. Mode 2P: SEMUA tangan menangkap
+    // (terbuka = P1, genggam = P2).
+    const catchingHands = twoP ? state.hands : state.hands.filter(h=>h.open);
     // Keep object references instead of numeric IDs. This guarantees that
     // only the exact fruit touched by a hand is removed from this frame.
     const caughtFruits = new Set();
-    for(const hand of openHands){
+    for(const hand of catchingHands){
       let best = null, bestDist = Infinity;
       for(const f of state.fruits){
         if(caughtFruits.has(f)) continue;
@@ -786,8 +836,14 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
       }
       if(best){
         caughtFruits.add(best);
-        if(best.isBomb) handleBomb(best);
-        else handleCatch(best);
+        if(twoP){
+          const player = hand.open ? 'p1' : 'p2';
+          if(best.isBomb) handleBomb2P(player, best);
+          else handleCatch2P(player, best);
+        } else {
+          if(best.isBomb) handleBomb(best);
+          else handleCatch(best);
+        }
       }
     }
 
@@ -816,12 +872,20 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     if(state.flash > 0) state.flash = Math.max(0, state.flash - dt * 2.2);
     if(state.shake > 0) state.shake = Math.max(0, state.shake - dt * 3.5);
 
-    hudScore.textContent = state.score;
-    hudCombo.textContent = state.combo;
-    if(survival){
-      hudLives.textContent = '❤️'.repeat(Math.max(0, state.lives));
-    } else {
+    if(state.mode === '2player'){
+      hudP1.textContent = state.p1Score;
+      hudP2.textContent = state.p2Score;
+      hudP1Combo.textContent = 'kombo ' + state.p1Combo;
+      hudP2Combo.textContent = 'kombo ' + state.p2Combo;
       hudTime.textContent = Math.ceil(state.timeLeft);
+    } else {
+      hudScore.textContent = state.score;
+      hudCombo.textContent = state.combo;
+      if(survival){
+        hudLives.textContent = '❤️'.repeat(Math.max(0, state.lives));
+      } else {
+        hudTime.textContent = Math.ceil(state.timeLeft);
+      }
     }
     if(state.running && survival && state.lives <= 0) endGame();
   }
@@ -901,6 +965,25 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     popCombo._t = setTimeout(()=>{ comboPop.style.opacity = '0'; }, 700);
   }
 
+  // 2-player: catch/bomb per pemain ('p1' = tangan terbuka, 'p2' = genggam).
+  function handleCatch2P(player, f){
+    const combo = state[player + 'Combo'];
+    const mult = 1 + Math.floor(combo / 5) * 0.5;
+    const gained = Math.round(f.pts * mult);
+    state[player + 'Score'] += gained;
+    state[player + 'Combo'] = combo + 1;
+    if(state[player + 'Combo'] > state[player + 'MaxCombo']) state[player + 'MaxCombo'] = state[player + 'Combo'];
+    addEffect(f.x, f.y, '+' + gained, player === 'p1' ? '#5ae678' : '#ff9a3c');
+    beep(500 + Math.min(state[player + 'Combo'], 20) * 20, 0.12, 'triangle');
+  }
+  function handleBomb2P(player, f){
+    state[player + 'Score'] = Math.max(0, state[player + 'Score'] - 30);
+    state[player + 'Combo'] = 0;
+    addEffect(f.x, f.y, '-30', '#ff5a3c');
+    state.effects.push({x: f.x, y: f.y, boom: true, life: 0.5, startLife: 0.5});
+    beep(90, 0.35, 'sawtooth');
+  }
+
   function addEffect(x, y, text, color){
     state.effects.push({x, y, text, color, life: 0.7, startLife: 0.7});
   }
@@ -956,14 +1039,21 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     }
 
     // hand indicators - green ring = open/catch-ready, gray dashed = closed/safe
+    const twoPRender = state.mode === '2player';
     for(const hand of state.hands){
       ctx.save();
       ctx.beginPath();
       ctx.arc(hand.cx, hand.cy, hand.r * 0.65, 0, Math.PI * 2);
       if(hand.open){
+        // Terbuka = P1 (hijau), aktif dalam semua mode.
         ctx.strokeStyle = 'rgba(90, 230, 120, 0.9)';
         ctx.lineWidth = 4;
+      } else if(twoPRender){
+        // 2P: genggam = P2 (oren), aktif.
+        ctx.strokeStyle = 'rgba(255, 154, 60, 0.95)';
+        ctx.lineWidth = 4;
       } else {
+        // Mode single: genggam = selamat/tak aktif (kelabu putus-putus).
         ctx.strokeStyle = 'rgba(200, 200, 200, 0.7)';
         ctx.lineWidth = 3;
         ctx.setLineDash([6,6]);
@@ -1282,6 +1372,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     state.running = false;
     distanceWarning.classList.add('hidden');
     leaveFullscreen();
+    if(state.mode === '2player'){ showResult2P(); return; }
     const survival = state.mode === 'survival';
     $('final-score').textContent = state.score;
     $('final-combo').textContent = 'Kombo terbaik: ' + state.maxCombo;
@@ -1295,6 +1386,18 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     gameWrap.classList.add('hidden');
     screenOver.classList.remove('hidden');
     prefillName();
+  }
+
+  function showResult2P(){
+    const p1 = state.p1Score, p2 = state.p2Score;
+    const title = p1 > p2 ? '🏆 Player 1 Menang!'
+                : p2 > p1 ? '🏆 Player 2 Menang!'
+                : '🤝 Seri!';
+    $('result2p-title').textContent = title;
+    $('result2p-p1').textContent = p1;
+    $('result2p-p2').textContent = p2;
+    gameWrap.classList.add('hidden');
+    screenResult2P.classList.remove('hidden');
   }
 
   function prefillName(){
@@ -1383,6 +1486,7 @@ import { HandLandmarker, FaceLandmarker, FilesetResolver } from "https://cdn.jsd
     }
     screenRank.classList.add('hidden');
     screenOver.classList.add('hidden');
+    screenResult2P.classList.add('hidden');
     gameWrap.classList.add('hidden');
     screenStart.classList.remove('hidden');
   }
